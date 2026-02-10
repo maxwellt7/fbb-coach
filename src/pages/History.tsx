@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Calendar,
   TrendingUp,
@@ -8,9 +8,11 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval, subWeeks } from 'date-fns';
+import { format, parseISO, startOfWeek, isWithinInterval, subWeeks } from 'date-fns';
 import {
   LineChart,
   Line,
@@ -26,11 +28,11 @@ import {
 type TimeFilter = 'all' | 'week' | 'month' | '3months';
 
 export default function History() {
-  const { workoutLogs, getStats, getPersonalRecords } = useStore();
+  const { workoutLogs, getPersonalRecords, exportData, importData } = useStore();
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('month');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const stats = getStats();
   const personalRecords = getPersonalRecords();
 
   // Filter logs based on time period
@@ -95,6 +97,53 @@ export default function History() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const data = exportData();
+              const blob = new Blob([data], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `fbb-coach-backup-${format(new Date(), 'yyyy-MM-dd')}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            title="Export all data"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            title="Import data from backup"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Import</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                const result = event.target?.result;
+                if (typeof result === 'string') {
+                  if (confirm('This will replace all current data. Continue?')) {
+                    const success = importData(result);
+                    alert(success ? 'Data imported successfully!' : 'Invalid backup file.');
+                  }
+                }
+              };
+              reader.readAsText(file);
+              e.target.value = '';
+            }}
+          />
           <Filter className="w-4 h-4 text-gray-400" />
           <select
             value={timeFilter}

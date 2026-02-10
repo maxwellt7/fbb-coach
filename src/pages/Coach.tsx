@@ -14,7 +14,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export default function Coach() {
-  const { chatMessages, addChatMessage, clearChatHistory, programs, workoutLogs, getStats } =
+  const { chatMessages, addChatMessage, clearChatHistory, activeProgram, workoutLogs, getStats } =
     useStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +46,7 @@ export default function Coach() {
           weeklyWorkouts: stats.weeklyWorkouts,
           personalRecords: stats.personalRecords.slice(0, 5),
         },
-        activeProgram: programs.find((p) => p.id === programs[0]?.id)?.name,
+        activeProgram: activeProgram?.name,
         recentWorkouts: workoutLogs.slice(-3).map((w) => ({
           date: w.date,
           setsCompleted: w.sets.filter((s) => s.completed).length,

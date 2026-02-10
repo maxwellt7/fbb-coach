@@ -7,7 +7,6 @@ import {
   Plus,
   Trash2,
   Clock,
-  Dumbbell,
   X,
   Save,
 } from 'lucide-react';
@@ -32,6 +31,9 @@ export default function Tracker() {
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [notes, setNotes] = useState('');
   const [rating, setRating] = useState(0);
+  const [restTimer, setRestTimer] = useState(0);
+  const [restTimerActive, setRestTimerActive] = useState(false);
+  const [restDuration, setRestDuration] = useState(90);
 
   // Timer effect
   useEffect(() => {
@@ -44,6 +46,45 @@ export default function Tracker() {
 
     return () => clearInterval(interval);
   }, [currentWorkout]);
+
+  // Prevent accidental data loss during active workout
+  useEffect(() => {
+    if (!currentWorkout) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentWorkout]);
+
+  // Rest timer countdown
+  useEffect(() => {
+    if (!restTimerActive || restTimer <= 0) {
+      if (restTimerActive && restTimer <= 0) {
+        setRestTimerActive(false);
+      }
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRestTimer((prev) => {
+        if (prev <= 1) {
+          setRestTimerActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [restTimerActive, restTimer]);
+
+  const startRestTimer = () => {
+    setRestTimer(restDuration);
+    setRestTimerActive(true);
+  };
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -224,6 +265,45 @@ export default function Tracker() {
               width: totalSets > 0 ? `${(completedSets / totalSets) * 100}%` : '0%',
             }}
           />
+        </div>
+
+        {/* Rest Timer */}
+        <div className="mt-3 flex items-center gap-3">
+          {restTimerActive ? (
+            <div className="flex items-center gap-2">
+              <span className={`text-lg font-mono font-bold ${restTimer <= 10 ? 'text-red-400 animate-pulse' : 'text-yellow-400'}`}>
+                Rest: {Math.floor(restTimer / 60)}:{(restTimer % 60).toString().padStart(2, '0')}
+              </span>
+              <button
+                onClick={() => { setRestTimerActive(false); setRestTimer(0); }}
+                className="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-gray-700 transition-colors"
+              >
+                Skip
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={startRestTimer}
+                className="flex items-center gap-1 text-sm px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
+              >
+                <Pause className="w-3 h-3" />
+                Rest Timer
+              </button>
+              <select
+                value={restDuration}
+                onChange={(e) => setRestDuration(parseInt(e.target.value))}
+                className="text-xs bg-gray-800 border-0 rounded px-2 py-1 text-gray-400 focus:outline-none"
+              >
+                <option value={30}>30s</option>
+                <option value={60}>60s</option>
+                <option value={90}>90s</option>
+                <option value={120}>2min</option>
+                <option value={180}>3min</option>
+                <option value={300}>5min</option>
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

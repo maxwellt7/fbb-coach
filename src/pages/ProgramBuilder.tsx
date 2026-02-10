@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Save,
@@ -238,7 +238,7 @@ export default function ProgramBuilder() {
           </div>
         ) : (
           <div className="space-y-3">
-            {workoutDays.map((day, dayIndex) => (
+            {workoutDays.map((day) => (
               <div
                 key={day.id}
                 className="bg-gray-800/30 rounded-xl border border-gray-700/50 overflow-hidden"

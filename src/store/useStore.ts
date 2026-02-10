@@ -29,6 +29,10 @@ interface AppState {
   // Stats
   getStats: () => UserStats;
   getPersonalRecords: () => PersonalRecord[];
+
+  // Data Export/Import
+  exportData: () => string;
+  importData: (jsonString: string) => boolean;
 }
 
 export const useStore = create<AppState>()(
@@ -239,6 +243,37 @@ export const useStore = create<AppState>()(
         }
 
         return Array.from(prMap.values());
+      },
+
+      // Data Export/Import
+      exportData: () => {
+        const { programs, activeProgram, workoutLogs, chatMessages } = get();
+        return JSON.stringify({
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          programs,
+          activeProgram,
+          workoutLogs,
+          chatMessages,
+        }, null, 2);
+      },
+
+      importData: (jsonString: string) => {
+        try {
+          const data = JSON.parse(jsonString);
+          if (!data.version || !data.programs || !data.workoutLogs) {
+            return false;
+          }
+          set({
+            programs: data.programs || [],
+            activeProgram: data.activeProgram || null,
+            workoutLogs: data.workoutLogs || [],
+            chatMessages: data.chatMessages || [],
+          });
+          return true;
+        } catch {
+          return false;
+        }
       },
     }),
     {

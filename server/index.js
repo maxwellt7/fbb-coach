@@ -1,11 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { CohereClient } from 'cohere-ai';
+import { Client as NotionClient } from '@notionhq/client';
 
 dotenv.config();
 
@@ -15,31 +18,49 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// --- Security Middleware ---
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+}));
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.FRONTEND_URL || 'http://localhost:5173']
+  : ['http://localhost:5173', 'http://localhost:3001'];
+
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '1mb' }));
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+app.use('/api/', apiLimiter);
 
-// Initialize Cohere for embeddings
+// --- Initialize OpenAI ---
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
+
+// --- Initialize Cohere ---
 let cohere = null;
 if (process.env.COHERE_API_KEY) {
-  cohere = new CohereClient({
-    token: process.env.COHERE_API_KEY,
-  });
+  cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
   console.log('Cohere initialized successfully');
 }
 
-// Initialize Pinecone (if configured)
+// --- Initialize Pinecone ---
 let pineconeIndex = null;
 if (process.env.PINECONE_API_KEY) {
   try {
-    const pinecone = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY,
-    });
+    const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
     pineconeIndex = pinecone.index(process.env.PINECONE_INDEX || 'fitness-programming');
     console.log('Pinecone initialized successfully');
   } catch (error) {
@@ -47,7 +68,17 @@ if (process.env.PINECONE_API_KEY) {
   }
 }
 
-// System prompt for the AI coach
+// --- Initialize Notion ---
+let notion = null;
+if (process.env.NOTION_API_KEY) {
+  notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
+  console.log('Notion initialized successfully');
+}
+
+const NOTION_CLIENT_DB_ID = process.env.NOTION_CLIENT_DB_ID;
+const NOTION_WORKOUT_TRACKER_DB_ID = process.env.NOTION_WORKOUT_TRACKER_DB_ID;
+
+// --- System Prompt ---
 const SYSTEM_PROMPT = `You are FBB Coach, an expert AI fitness coach specializing in bodybuilding, powerlifting, and general strength training. You have deep knowledge in:
 
 - Exercise science and biomechanics
@@ -68,11 +99,11 @@ When asked about programs or exercises:
 - Explain the reasoning behind your recommendations
 - Consider the user's experience level and goals
 
-When the user provides their workout data (stats, recent workouts, active program), use this information to give personalized advice.
+When the user provides their workout data (stats, recent workouts, active program), use this information to give personalized advice. If user profile data is available, tailor recommendations to their specific metrics and goals.
 
 Always prioritize safety and proper form over ego lifting.`;
 
-// Fitness knowledge base (built-in fallback when Pinecone isn't configured)
+// --- Fitness Knowledge Base (fallback) ---
 const FITNESS_KNOWLEDGE = {
   hypertrophy: `Hypertrophy training focuses on muscle growth through moderate weights (60-80% 1RM) and higher volume (8-12 reps, 3-5 sets). Key principles:
 - Time under tension: 30-60 seconds per set
@@ -111,26 +142,123 @@ const FITNESS_KNOWLEDGE = {
   },
 };
 
-// Search knowledge base (Pinecone or fallback)
+// --- Helper: Extract Notion property value ---
+function getNotionValue(property) {
+  if (!property) return null;
+  switch (property.type) {
+    case 'title':
+      return property.title?.map(t => t.plain_text).join('') || null;
+    case 'rich_text':
+      return property.rich_text?.map(t => t.plain_text).join('') || null;
+    case 'number':
+      return property.number;
+    case 'select':
+      return property.select?.name || null;
+    case 'multi_select':
+      return property.multi_select?.map(s => s.name) || [];
+    case 'date':
+      return property.date?.start || null;
+    case 'checkbox':
+      return property.checkbox;
+    case 'email':
+      return property.email;
+    case 'phone_number':
+      return property.phone_number;
+    case 'url':
+      return property.url;
+    case 'formula':
+      if (property.formula.type === 'string') return property.formula.string;
+      if (property.formula.type === 'number') return property.formula.number;
+      if (property.formula.type === 'boolean') return property.formula.boolean;
+      if (property.formula.type === 'date') return property.formula.date?.start;
+      return null;
+    case 'rollup':
+      if (property.rollup.type === 'number') return property.rollup.number;
+      if (property.rollup.type === 'array') return property.rollup.array;
+      return null;
+    case 'relation':
+      return property.relation?.map(r => r.id) || [];
+    default:
+      return null;
+  }
+}
+
+// --- Helper: Fetch user profile from Notion ---
+async function fetchUserProfile() {
+  if (!notion || !NOTION_CLIENT_DB_ID) return null;
+
+  try {
+    const response = await notion.databases.query({
+      database_id: NOTION_CLIENT_DB_ID,
+      page_size: 1,
+    });
+
+    if (response.results.length === 0) return null;
+
+    const page = response.results[0];
+    const props = page.properties;
+
+    const profile = {};
+    for (const [key, value] of Object.entries(props)) {
+      const extracted = getNotionValue(value);
+      if (extracted !== null && extracted !== undefined && extracted !== '') {
+        profile[key] = extracted;
+      }
+    }
+
+    return profile;
+  } catch (error) {
+    console.error('Error fetching Notion user profile:', error.message);
+    return null;
+  }
+}
+
+// --- Helper: Fetch workouts from Notion ---
+async function fetchNotionWorkouts(limit = 20) {
+  if (!notion || !NOTION_WORKOUT_TRACKER_DB_ID) return [];
+
+  try {
+    const response = await notion.databases.query({
+      database_id: NOTION_WORKOUT_TRACKER_DB_ID,
+      page_size: limit,
+      sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+    });
+
+    return response.results.map(page => {
+      const props = page.properties;
+      const workout = { id: page.id, created: page.created_time };
+      for (const [key, value] of Object.entries(props)) {
+        const extracted = getNotionValue(value);
+        if (extracted !== null && extracted !== undefined && extracted !== '') {
+          workout[key] = extracted;
+        }
+      }
+      return workout;
+    });
+  } catch (error) {
+    console.error('Error fetching Notion workouts:', error.message);
+    return [];
+  }
+}
+
+// --- Helper: Search Pinecone knowledge base ---
 async function searchKnowledge(query) {
   if (pineconeIndex && cohere) {
     try {
-      // Generate embedding for query using Cohere
       const embeddingResponse = await cohere.embed({
         texts: [query],
         model: 'embed-english-v3.0',
         inputType: 'search_query',
       });
-      
+
       const queryEmbedding = embeddingResponse.embeddings[0];
-      
-      // Search Pinecone
+
       const searchResults = await pineconeIndex.query({
         vector: queryEmbedding,
         topK: 5,
         includeMetadata: true,
       });
-      
+
       if (searchResults.matches && searchResults.matches.length > 0) {
         return searchResults.matches
           .map(match => match.metadata?.text || match.metadata?.content || '')
@@ -141,11 +269,11 @@ async function searchKnowledge(query) {
       console.error('Pinecone search error:', error.message);
     }
   }
-  
+
   // Fallback to built-in knowledge
   const queryLower = query.toLowerCase();
-  let relevantKnowledge = [];
-  
+  const relevantKnowledge = [];
+
   if (queryLower.includes('hypertrophy') || queryLower.includes('muscle') || queryLower.includes('size')) {
     relevantKnowledge.push(FITNESS_KNOWLEDGE.hypertrophy);
   }
@@ -158,29 +286,64 @@ async function searchKnowledge(query) {
   if (queryLower.includes('recovery') || queryLower.includes('rest') || queryLower.includes('sleep')) {
     relevantKnowledge.push(FITNESS_KNOWLEDGE.recovery);
   }
-  
+
   return relevantKnowledge.join('\n\n');
 }
 
-// Chat endpoint
+// --- Helper: Input validation ---
+function validateString(value, fieldName, maxLength = 5000) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return `${fieldName} is required and must be a non-empty string`;
+  }
+  if (value.length > maxLength) {
+    return `${fieldName} must be less than ${maxLength} characters`;
+  }
+  return null;
+}
+
+// =====================
+// API ENDPOINTS
+// =====================
+
+// --- Chat endpoint ---
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, context, chatHistory = [] } = req.body;
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: 'OpenAI API key not configured',
+    const validationError = validateString(message, 'message');
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+
+    if (!openai) {
+      return res.status(503).json({
+        error: 'AI service not configured',
         response: 'Please configure your OpenAI API key in the .env file to use the AI coach feature.',
       });
     }
+
+    // Fetch user profile from Notion for personalization
+    const userProfile = await fetchUserProfile();
 
     // Search for relevant knowledge
     const relevantKnowledge = await searchKnowledge(message);
 
     // Build context message
     let contextMessage = '';
+
+    if (userProfile) {
+      contextMessage += '\n\nUser Profile (from database):';
+      for (const [key, value] of Object.entries(userProfile)) {
+        if (value && typeof value !== 'object') {
+          contextMessage += `\n- ${key}: ${value}`;
+        } else if (Array.isArray(value) && value.length > 0) {
+          contextMessage += `\n- ${key}: ${value.join(', ')}`;
+        }
+      }
+    }
+
     if (context) {
-      contextMessage = `\n\nUser's current fitness data:
+      contextMessage += `\n\nUser's current fitness data:
 - Total workouts completed: ${context.stats?.totalWorkouts || 0}
 - Current workout streak: ${context.stats?.currentStreak || 0} days
 - Weekly workouts: ${context.stats?.weeklyWorkouts || 0}
@@ -191,17 +354,15 @@ ${context.activeProgram ? `- Active program: ${context.activeProgram}` : ''}`;
       contextMessage += `\n\nRelevant fitness knowledge:\n${relevantKnowledge}`;
     }
 
-    // Build messages array
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT + contextMessage },
       ...chatHistory.slice(-10).map(msg => ({
-        role: msg.role,
-        content: msg.content,
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: String(msg.content || ''),
       })),
       { role: 'user', content: message },
     ];
 
-    // Call OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
@@ -210,40 +371,74 @@ ${context.activeProgram ? `- Active program: ${context.activeProgram}` : ''}`;
     });
 
     const response = completion.choices[0].message.content;
-
     res.json({ response });
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({
-      error: error.message,
+      error: 'An internal error occurred',
       response: 'I apologize, but I encountered an error. Please try again.',
     });
   }
 });
 
-// Search endpoint
+// --- Search endpoint ---
 app.post('/api/search', async (req, res) => {
   try {
     const { query } = req.body;
+
+    const validationError = validateString(query, 'query', 1000);
+    if (validationError) {
+      return res.status(400).json({ error: validationError, results: [] });
+    }
+
     const results = await searchKnowledge(query);
     res.json({ results: results ? [results] : [] });
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({ error: error.message, results: [] });
+    res.status(500).json({ error: 'Search failed', results: [] });
   }
 });
 
-// Generate program endpoint
+// --- Generate program endpoint ---
 app.post('/api/generate-program', async (req, res) => {
   try {
     const { goal, daysPerWeek, experienceLevel, equipment } = req.body;
 
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    if (!goal || !daysPerWeek || !experienceLevel) {
+      return res.status(400).json({ error: 'Missing required fields: goal, daysPerWeek, experienceLevel' });
     }
 
-    const prompt = `Create a ${daysPerWeek}-day workout program for someone with ${experienceLevel} experience level, focusing on ${goal}. 
-Available equipment: ${equipment.join(', ')}.
+    if (!openai) {
+      return res.status(503).json({ error: 'AI service not configured' });
+    }
+
+    // Fetch user profile and knowledge for personalization
+    const [userProfile, relevantKnowledge] = await Promise.all([
+      fetchUserProfile(),
+      searchKnowledge(`${goal} ${experienceLevel} workout program`),
+    ]);
+
+    let userContext = '';
+    if (userProfile) {
+      userContext = '\n\nUser profile context:';
+      for (const [key, value] of Object.entries(userProfile)) {
+        if (value && typeof value !== 'object') {
+          userContext += `\n- ${key}: ${value}`;
+        } else if (Array.isArray(value) && value.length > 0) {
+          userContext += `\n- ${key}: ${value.join(', ')}`;
+        }
+      }
+    }
+
+    let knowledgeContext = '';
+    if (relevantKnowledge) {
+      knowledgeContext = `\n\nRelevant programming knowledge:\n${relevantKnowledge}`;
+    }
+
+    const prompt = `Create a ${daysPerWeek}-day workout program for someone with ${experienceLevel} experience level, focusing on ${goal}.
+Available equipment: ${(equipment || []).join(', ') || 'Full gym'}.
+${userContext}
+${knowledgeContext}
 
 Return the program as a JSON object with the following structure:
 {
@@ -263,9 +458,7 @@ Return the program as a JSON object with the following structure:
       ]
     }
   ]
-}
-
-Only return valid JSON, no additional text.`;
+}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -275,34 +468,58 @@ Only return valid JSON, no additional text.`;
       ],
       max_tokens: 2000,
       temperature: 0.7,
+      response_format: { type: 'json_object' },
     });
 
     const responseText = completion.choices[0].message.content;
-    
-    // Extract JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const program = JSON.parse(jsonMatch[0]);
-      res.json({ program });
-    } else {
-      throw new Error('Failed to parse program JSON');
-    }
+    const program = JSON.parse(responseText);
+    res.json({ program });
   } catch (error) {
     console.error('Generate program error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to generate program' });
   }
 });
 
-// Health check
+// --- Notion: Get user profile ---
+app.get('/api/profile', async (req, res) => {
+  try {
+    const profile = await fetchUserProfile();
+    if (!profile) {
+      return res.status(404).json({ error: 'No profile found', profile: null });
+    }
+    res.json({ profile });
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile', profile: null });
+  }
+});
+
+// --- Notion: Get workouts ---
+app.get('/api/notion-workouts', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const workouts = await fetchNotionWorkouts(limit);
+    res.json({ workouts });
+  } catch (error) {
+    console.error('Notion workouts error:', error);
+    res.status(500).json({ error: 'Failed to fetch workouts', workouts: [] });
+  }
+});
+
+// --- Health check ---
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    openai: !!process.env.OPENAI_API_KEY,
-    pinecone: !!pineconeIndex,
+    services: {
+      openai: !!openai,
+      pinecone: !!pineconeIndex,
+      cohere: !!cohere,
+      notion: !!notion,
+    },
   });
 });
 
-// Serve static files in production
+// --- Serve static files in production ---
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(join(__dirname, '../dist')));
   app.get('*', (req, res) => {
@@ -310,9 +527,16 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// --- Error handling middleware ---
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'An internal server error occurred' });
+});
+
 app.listen(PORT, () => {
-  console.log(`🏋️ FBB Coach server running on http://localhost:${PORT}`);
-  console.log(`   OpenAI: ${process.env.OPENAI_API_KEY ? '✓ Configured' : '✗ Not configured'}`);
-  console.log(`   Cohere: ${cohere ? '✓ Configured' : '✗ Not configured'}`);
-  console.log(`   Pinecone: ${pineconeIndex ? '✓ Connected' : '✗ Not connected (using fallback)'}`);
+  console.log(`FBB Coach server running on http://localhost:${PORT}`);
+  console.log(`   OpenAI: ${openai ? 'Configured' : 'Not configured'}`);
+  console.log(`   Cohere: ${cohere ? 'Configured' : 'Not configured'}`);
+  console.log(`   Pinecone: ${pineconeIndex ? 'Connected' : 'Not connected (using fallback)'}`);
+  console.log(`   Notion: ${notion ? 'Connected' : 'Not connected'}`);
 });

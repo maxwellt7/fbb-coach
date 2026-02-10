@@ -13,7 +13,7 @@ import { useStore } from '../store/useStore';
 import { format, isToday, parseISO } from 'date-fns';
 
 export default function Dashboard() {
-  const { programs, activeProgram, workoutLogs, currentWorkout, getStats } = useStore();
+  const { activeProgram, workoutLogs, currentWorkout, getStats } = useStore();
   const stats = getStats();
   
   const recentWorkouts = workoutLogs
