@@ -1,0 +1,19 @@
+{
+  "name": "FBB Coach - AI Workout Assistant",
+  "short_name": "FBB Coach",
+  "description": "AI-powered workout programming and tracking",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "fitness"]
+}

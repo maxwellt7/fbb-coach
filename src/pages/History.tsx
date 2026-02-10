@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   Calendar,
   TrendingUp,
@@ -10,6 +10,7 @@ import {
   Filter,
   Download,
   Upload,
+  Search,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { format, parseISO, startOfWeek, isWithinInterval, subWeeks } from 'date-fns';
@@ -33,8 +34,44 @@ export default function History() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('month');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedExercise, setSelectedExercise] = useState<string>('');
 
   const personalRecords = getPersonalRecords();
+
+  // Get unique exercise names from all workout logs
+  const allExerciseNames = useMemo(() => {
+    const names = new Set<string>();
+    workoutLogs.forEach((log) => {
+      log.sets.forEach((set) => {
+        if (set.completed && set.exerciseName) names.add(set.exerciseName);
+      });
+    });
+    return Array.from(names).sort();
+  }, [workoutLogs]);
+
+  // Build exercise-specific chart data
+  const exerciseChartData = useMemo(() => {
+    if (!selectedExercise) return [];
+    return workoutLogs
+      .filter((log) => log.completed)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .reduce<{ date: string; bestWeight: number; bestVolume: number }[]>((acc, log) => {
+        const matching = log.sets.filter(
+          (s) => s.completed && s.exerciseName === selectedExercise && s.actualWeight
+        );
+        if (matching.length === 0) return acc;
+        const bestWeight = Math.max(...matching.map((s) => s.actualWeight || 0));
+        const bestVolume = Math.max(
+          ...matching.map((s) => (s.actualWeight || 0) * (s.actualReps || 0))
+        );
+        acc.push({
+          date: format(parseISO(log.date), 'MMM d'),
+          bestWeight,
+          bestVolume,
+        });
+        return acc;
+      }, []);
+  }, [selectedExercise, workoutLogs]);
 
   // Filter logs based on time period
   const filteredLogs = workoutLogs
@@ -108,6 +145,7 @@ export default function History() {
             }}
             className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
             title="Export all data"
+            aria-label="Export all data"
           >
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Export</span>
@@ -116,6 +154,7 @@ export default function History() {
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
             title="Import data from backup"
+            aria-label="Import data from backup"
           >
             <Upload className="w-4 h-4" />
             <span className="hidden sm:inline">Import</span>
@@ -146,6 +185,7 @@ export default function History() {
           <select
             value={timeFilter}
             onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
+            aria-label="Time period filter"
             className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500"
           >
             <option value="week">Last Week</option>
@@ -243,6 +283,93 @@ export default function History() {
               </ResponsiveContainer>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Exercise Progress */}
+      {allExerciseNames.length > 0 && (
+        <div className="glass rounded-2xl p-6">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Search className="w-5 h-5 text-primary-400" />
+            Exercise Progress
+          </h2>
+          <div className="mb-4">
+            <select
+              value={selectedExercise}
+              onChange={(e) => setSelectedExercise(e.target.value)}
+              aria-label="Select exercise to track"
+              className="w-full md:w-64 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-500"
+            >
+              <option value="">Select an exercise...</option>
+              {allExerciseNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedExercise && exerciseChartData.length > 0 ? (
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm text-gray-400 mb-2">Best Weight per Session</h3>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={exerciseChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
+                      <YAxis stroke="#9CA3AF" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1F2937',
+                          border: '1px solid #374151',
+                          borderRadius: '8px',
+                        }}
+                        labelStyle={{ color: '#9CA3AF' }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="bestWeight"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        dot={{ fill: '#22c55e', strokeWidth: 2 }}
+                        name="Weight (lbs)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm text-gray-400 mb-2">Best Set Volume per Session</h3>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={exerciseChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="date" stroke="#9CA3AF" fontSize={12} />
+                      <YAxis stroke="#9CA3AF" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1F2937',
+                          border: '1px solid #374151',
+                          borderRadius: '8px',
+                        }}
+                        labelStyle={{ color: '#9CA3AF' }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="bestVolume"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        dot={{ fill: '#f59e0b', strokeWidth: 2 }}
+                        name="Volume (lbs)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          ) : selectedExercise ? (
+            <p className="text-gray-500 text-sm">No data found for {selectedExercise} in logged workouts.</p>
+          ) : null}
         </div>
       )}
 

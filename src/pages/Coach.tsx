@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useStore } from '../store/useStore';
 import { format, parseISO } from 'date-fns';
 import { sendMessage } from '../services/api';
@@ -97,6 +98,7 @@ export default function Coach() {
             }}
             className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
             title="Clear history"
+            aria-label="Clear chat history"
           >
             <Trash2 className="w-5 h-5" />
           </button>
@@ -148,9 +150,15 @@ export default function Coach() {
                       : 'bg-gray-800/50'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {message.content}
-                  </div>
+                  {message.role === 'assistant' ? (
+                    <div className="prose prose-invert prose-sm max-w-none prose-headings:text-gray-200 prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-code:bg-gray-700 prose-code:px-1 prose-code:rounded prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {message.content}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-2">
                     {format(parseISO(message.timestamp), 'h:mm a')}
                   </p>
@@ -185,11 +193,13 @@ export default function Coach() {
           onKeyDown={handleKeyDown}
           placeholder="Ask me anything about fitness..."
           rows={1}
+          aria-label="Message input"
           className="flex-1 px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors resize-none"
         />
         <button
           onClick={() => handleSend()}
           disabled={!input.trim() || isLoading}
+          aria-label="Send message"
           className="px-4 py-3 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Send className="w-5 h-5" />

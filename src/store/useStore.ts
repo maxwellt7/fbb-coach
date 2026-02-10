@@ -19,6 +19,7 @@ interface AppState {
   startWorkout: (programId?: string, workoutDayId?: string, sets?: WorkoutSet[]) => void;
   updateCurrentWorkout: (updates: Partial<WorkoutLog>) => void;
   completeSet: (setId: string, actualReps: number, actualWeight: number, rpe?: number) => void;
+  uncompleteSet: (setId: string) => void;
   finishWorkout: (notes?: string, rating?: number) => void;
   cancelWorkout: () => void;
 
@@ -104,6 +105,21 @@ export const useStore = create<AppState>()(
                 sets: state.currentWorkout.sets.map((s) =>
                   s.id === setId
                     ? { ...s, actualReps, actualWeight, rpe, completed: true }
+                    : s
+                ),
+              }
+            : null,
+        }));
+      },
+
+      uncompleteSet: (setId) => {
+        set((state) => ({
+          currentWorkout: state.currentWorkout
+            ? {
+                ...state.currentWorkout,
+                sets: state.currentWorkout.sets.map((s) =>
+                  s.id === setId
+                    ? { ...s, completed: false }
                     : s
                 ),
               }

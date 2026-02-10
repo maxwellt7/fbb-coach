@@ -4,6 +4,7 @@ import {
   Play,
   Pause,
   CheckCircle,
+  RotateCcw,
   Plus,
   Trash2,
   Clock,
@@ -23,6 +24,7 @@ export default function Tracker() {
     startWorkout,
     updateCurrentWorkout,
     completeSet,
+    uncompleteSet,
     finishWorkout,
     cancelWorkout,
   } = useStore();
@@ -140,18 +142,22 @@ export default function Tracker() {
   };
 
   const handleCompleteSet = (set: WorkoutSet) => {
-    completeSet(
-      set.id,
-      set.actualReps || set.targetReps,
-      set.actualWeight || set.targetWeight,
-      set.rpe
-    );
+    if (set.completed) {
+      uncompleteSet(set.id);
+    } else {
+      completeSet(
+        set.id,
+        set.actualReps || set.targetReps,
+        set.actualWeight || set.targetWeight,
+        set.rpe
+      );
+    }
   };
 
   const handleFinish = () => {
     finishWorkout(notes, rating);
     setShowFinishModal(false);
-    navigate('/');
+    navigate('/history');
   };
 
   const handleCancel = () => {
@@ -219,10 +225,21 @@ export default function Tracker() {
   const totalSets = currentWorkout.sets.length;
   const totalVolume = calcVolume(currentWorkout.sets);
 
+  // Group sets by exercise name for visual grouping
+  const exerciseGroups: { name: string; sets: (WorkoutSet & { originalIndex: number })[] }[] = [];
+  currentWorkout.sets.forEach((set, idx) => {
+    const lastGroup = exerciseGroups[exerciseGroups.length - 1];
+    if (lastGroup && lastGroup.name === set.exerciseName && set.exerciseName !== '') {
+      lastGroup.sets.push({ ...set, originalIndex: idx });
+    } else {
+      exerciseGroups.push({ name: set.exerciseName, sets: [{ ...set, originalIndex: idx }] });
+    }
+  });
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header with timer */}
-      <div className="glass rounded-2xl p-4 sticky top-0 z-10">
+      <div className="glass rounded-2xl p-4 sticky top-16 lg:top-0 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -231,16 +248,16 @@ export default function Tracker() {
                 {formatTime(elapsedTime)}
               </span>
             </div>
-            <div className="hidden md:flex items-center gap-4 text-sm text-gray-400">
+            <div className="flex items-center gap-4 text-sm text-gray-400">
               <span>{completedSets}/{totalSets} sets</span>
-              <span>{totalVolume.toLocaleString()} lbs</span>
+              <span className="hidden sm:inline">{totalVolume.toLocaleString()} lbs</span>
             </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={handleCancel}
               className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-              title="Cancel workout"
+              aria-label="Cancel workout"
             >
               <X className="w-5 h-5" />
             </button>
@@ -291,6 +308,7 @@ export default function Tracker() {
                 value={restDuration}
                 onChange={(e) => setRestDuration(parseInt(e.target.value))}
                 className="text-xs bg-gray-800 border-0 rounded px-2 py-1 text-gray-400 focus:outline-none"
+                aria-label="Rest duration"
               >
                 <option value={30}>30s</option>
                 <option value={60}>60s</option>
@@ -311,17 +329,26 @@ export default function Tracker() {
         ))}
       </datalist>
 
-      {/* Sets List */}
-      <div className="space-y-3">
-        {currentWorkout.sets.map((set, idx) => (
-          <SetCard
-            key={set.id}
-            set={set}
-            index={idx}
-            onUpdate={(updates) => handleUpdateSet(set.id, updates)}
-            onComplete={() => handleCompleteSet(set)}
-            onRemove={() => handleRemoveSet(set.id)}
-          />
+      {/* Sets List - grouped by exercise */}
+      <div className="space-y-4">
+        {exerciseGroups.map((group, groupIdx) => (
+          <div key={groupIdx} className="space-y-2">
+            {group.name && group.sets.length > 1 && (
+              <h3 className="text-sm font-medium text-gray-400 px-1">
+                {group.name} — {group.sets.filter(s => s.completed).length}/{group.sets.length} sets
+              </h3>
+            )}
+            {group.sets.map((set) => (
+              <SetCard
+                key={set.id}
+                set={set}
+                index={set.originalIndex}
+                onUpdate={(updates) => handleUpdateSet(set.id, updates)}
+                onComplete={() => handleCompleteSet(set)}
+                onRemove={() => handleRemoveSet(set.id)}
+              />
+            ))}
+          </div>
         ))}
       </div>
 
@@ -340,12 +367,28 @@ export default function Tracker() {
           <div className="glass rounded-2xl p-6 w-full max-w-md animate-fadeIn">
             <h2 className="text-xl font-semibold mb-4">Finish Workout</h2>
 
+            {/* Workout Summary */}
+            <div className="mb-4 p-3 bg-gray-800/50 rounded-xl text-sm">
+              <div className="flex justify-between mb-1">
+                <span className="text-gray-400">Duration</span>
+                <span>{formatTime(elapsedTime)}</span>
+              </div>
+              <div className="flex justify-between mb-1">
+                <span className="text-gray-400">Sets Completed</span>
+                <span>{completedSets}/{totalSets}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Total Volume</span>
+                <span>{totalVolume.toLocaleString()} lbs</span>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-gray-400 mb-2">
                   How was your workout?
                 </label>
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-2 justify-center" role="radiogroup" aria-label="Workout rating">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
@@ -353,6 +396,7 @@ export default function Tracker() {
                       className={`text-3xl transition-colors ${
                         star <= rating ? 'text-yellow-400' : 'text-gray-600'
                       }`}
+                      aria-label={`Rate ${star} out of 5 stars`}
                     >
                       ★
                     </button>
@@ -361,10 +405,11 @@ export default function Tracker() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-2">
+                <label htmlFor="workout-notes" className="block text-sm text-gray-400 mb-2">
                   Notes (optional)
                 </label>
                 <textarea
+                  id="workout-notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="How did it feel? Any PRs?"
@@ -421,18 +466,20 @@ function SetCard({
           value={set.exerciseName}
           onChange={(e) => onUpdate({ exerciseName: e.target.value })}
           placeholder="Exercise name"
-          className="flex-1 bg-transparent text-lg font-medium focus:outline-none"
+          className="flex-1 bg-transparent text-lg font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500 rounded"
           list="all-exercises"
+          aria-label="Exercise name"
         />
         <button
           onClick={onRemove}
           className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+          aria-label="Remove set"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div>
           <label className="text-xs text-gray-500 block mb-1">Target</label>
           <div className="flex items-center gap-1">
@@ -440,14 +487,16 @@ function SetCard({
               type="number"
               value={set.targetReps}
               onChange={(e) => onUpdate({ targetReps: parseInt(e.target.value) || 0 })}
-              className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+              aria-label="Target reps"
             />
             <span className="text-xs text-gray-500">×</span>
             <input
               type="number"
               value={set.targetWeight}
               onChange={(e) => onUpdate({ targetWeight: parseInt(e.target.value) || 0 })}
-              className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+              aria-label="Target weight"
             />
           </div>
         </div>
@@ -458,7 +507,8 @@ function SetCard({
             type="number"
             value={set.actualReps ?? set.targetReps}
             onChange={(e) => onUpdate({ actualReps: parseInt(e.target.value) || 0 })}
-            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+            aria-label="Actual reps"
           />
         </div>
 
@@ -468,7 +518,8 @@ function SetCard({
             type="number"
             value={set.actualWeight ?? set.targetWeight}
             onChange={(e) => onUpdate({ actualWeight: parseInt(e.target.value) || 0 })}
-            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+            aria-label="Actual weight"
           />
         </div>
 
@@ -477,7 +528,8 @@ function SetCard({
           <select
             value={set.rpe || ''}
             onChange={(e) => onUpdate({ rpe: e.target.value ? parseInt(e.target.value) : undefined })}
-            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full px-2 py-2 bg-gray-800/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+            aria-label="RPE rating"
           >
             <option value="">-</option>
             {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map((rpe) => (
@@ -491,15 +543,23 @@ function SetCard({
 
       <button
         onClick={onComplete}
-        disabled={set.completed}
         className={`mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg transition-colors ${
           set.completed
-            ? 'bg-green-500/20 text-green-400 cursor-default'
+            ? 'bg-green-500/20 text-green-400 hover:bg-yellow-500/20 hover:text-yellow-400'
             : 'bg-primary-500/20 text-primary-400 hover:bg-primary-500/30'
         }`}
       >
-        <CheckCircle className="w-4 h-4" />
-        {set.completed ? 'Completed' : 'Complete Set'}
+        {set.completed ? (
+          <>
+            <RotateCcw className="w-4 h-4" />
+            Undo
+          </>
+        ) : (
+          <>
+            <CheckCircle className="w-4 h-4" />
+            Complete Set
+          </>
+        )}
       </button>
     </div>
   );

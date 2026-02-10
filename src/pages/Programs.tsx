@@ -143,6 +143,7 @@ export default function Programs() {
                       }
                     }}
                     className="flex items-center justify-center px-3 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                    aria-label={`Delete ${program.name}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
