@@ -13,7 +13,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store/useStore';
 import type { WorkoutSet } from '../types';
-import { MUSCLE_GROUPS } from '../types';
+import { MUSCLE_GROUPS, calcVolume } from '../types';
 
 export default function Tracker() {
   const navigate = useNavigate();
@@ -217,10 +217,7 @@ export default function Tracker() {
   // Active workout view
   const completedSets = currentWorkout.sets.filter((s) => s.completed).length;
   const totalSets = currentWorkout.sets.length;
-  const totalVolume = currentWorkout.sets.reduce(
-    (acc, s) => acc + (s.actualWeight || 0) * (s.actualReps || 0),
-    0
-  );
+  const totalVolume = calcVolume(currentWorkout.sets);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -306,6 +303,13 @@ export default function Tracker() {
           )}
         </div>
       </div>
+
+      {/* Shared datalist for exercise autocomplete (rendered once) */}
+      <datalist id="all-exercises">
+        {MUSCLE_GROUPS.flatMap((g) => g.exercises).map((ex) => (
+          <option key={ex} value={ex} />
+        ))}
+      </datalist>
 
       {/* Sets List */}
       <div className="space-y-3">
@@ -420,11 +424,6 @@ function SetCard({
           className="flex-1 bg-transparent text-lg font-medium focus:outline-none"
           list="all-exercises"
         />
-        <datalist id="all-exercises">
-          {MUSCLE_GROUPS.flatMap((g) => g.exercises).map((ex) => (
-            <option key={ex} value={ex} />
-          ))}
-        </datalist>
         <button
           onClick={onRemove}
           className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Program, WorkoutLog, WorkoutSet, ChatMessage, UserStats, PersonalRecord } from '../types';
+import { calcVolume } from '../types';
 
 interface AppState {
   // Programs
@@ -193,15 +194,10 @@ export const useStore = create<AppState>()(
         currentStreak = tempStreak;
 
         // Calculate total volume
-        const totalVolume = workoutLogs.reduce((acc, log) => {
-          return (
-            acc +
-            log.sets.reduce(
-              (setAcc, s) => setAcc + (s.actualWeight || 0) * (s.actualReps || 0),
-              0
-            )
-          );
-        }, 0);
+        const totalVolume = workoutLogs.reduce(
+          (acc, log) => acc + calcVolume(log.sets),
+          0
+        );
 
         // Weekly workouts
         const weeklyWorkouts = workoutLogs.filter(

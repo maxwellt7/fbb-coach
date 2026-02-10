@@ -91,6 +91,14 @@ export const MUSCLE_GROUPS: MuscleGroup[] = [
   { name: 'Core', exercises: ['Planks', 'Cable Crunches', 'Hanging Leg Raises', 'Ab Wheel', 'Russian Twists'] },
 ];
 
+/** Calculate total volume (weight × reps) for an array of workout sets */
+export function calcVolume(sets: WorkoutSet[]): number {
+  return sets.reduce(
+    (acc, s) => acc + (s.actualWeight || 0) * (s.actualReps || 0),
+    0
+  );
+}
+
 export const EQUIPMENT_TYPES = [
   'Barbell',
   'Dumbbell',

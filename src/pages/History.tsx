@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { format, parseISO, startOfWeek, isWithinInterval, subWeeks } from 'date-fns';
+import { calcVolume } from '../types';
 import {
   LineChart,
   Line,
@@ -70,10 +71,7 @@ export default function History() {
     .reverse()
     .map((log) => ({
       date: format(parseISO(log.date), 'MMM d'),
-      volume: log.sets.reduce(
-        (acc, s) => acc + (s.actualWeight || 0) * (s.actualReps || 0),
-        0
-      ),
+      volume: calcVolume(log.sets),
     }));
 
   const weeklyChartData = (() => {
@@ -170,15 +168,7 @@ export default function History() {
           icon={<TrendingUp className="w-5 h-5" />}
           label="Total Volume"
           value={`${(
-            filteredLogs.reduce(
-              (acc, log) =>
-                acc +
-                log.sets.reduce(
-                  (setAcc, s) => setAcc + (s.actualWeight || 0) * (s.actualReps || 0),
-                  0
-                ),
-              0
-            ) / 1000
+            filteredLogs.reduce((acc, log) => acc + calcVolume(log.sets), 0) / 1000
           ).toFixed(0)}k lbs`}
           color="green"
         />
@@ -328,14 +318,7 @@ export default function History() {
                   <div className="flex items-center gap-4">
                     <div className="text-right hidden md:block">
                       <p className="font-medium">
-                        {log.sets
-                          .reduce(
-                            (acc, s) =>
-                              acc + (s.actualWeight || 0) * (s.actualReps || 0),
-                            0
-                          )
-                          .toLocaleString()}{' '}
-                        lbs
+                        {calcVolume(log.sets).toLocaleString()} lbs
                       </p>
                       {log.rating && (
                         <div className="flex gap-0.5 justify-end">
