@@ -261,7 +261,7 @@ export const useStore = create<AppState>()(
       exportData: () => {
         const { programs, activeProgram, workoutLogs, chatMessages } = get();
         return JSON.stringify({
-          version: 1,
+          version: 2,
           exportedAt: new Date().toISOString(),
           programs,
           activeProgram,
@@ -273,7 +273,7 @@ export const useStore = create<AppState>()(
       importData: (jsonString: string) => {
         try {
           const data = JSON.parse(jsonString);
-          if (!data.version || !data.programs || !data.workoutLogs) {
+          if (!data.programs || !data.workoutLogs) {
             return false;
           }
           set({

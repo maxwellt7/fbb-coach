@@ -480,7 +480,14 @@ export default function History() {
                             key={idx}
                             className="flex items-center justify-between py-2 text-sm"
                           >
-                            <span className="text-gray-300">{set.exerciseName}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-300">{set.exerciseName}</span>
+                              {set.tempo && (
+                                <span className="text-xs px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                                  {set.tempo}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-gray-500">
                               {set.actualReps} × {set.actualWeight} lbs
                               {set.rpe && ` @ RPE ${set.rpe}`}

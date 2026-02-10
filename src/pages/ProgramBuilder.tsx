@@ -15,7 +15,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store/useStore';
 import type { Program, WorkoutDay, WorkoutSet } from '../types';
-import { MUSCLE_GROUPS } from '../types';
+import { MUSCLE_GROUPS, TRAINING_STYLES } from '../types';
 import { generateProgram } from '../services/api';
 
 const DAYS_OF_WEEK = [
@@ -28,119 +28,165 @@ const DAYS_OF_WEEK = [
   'Saturday',
 ];
 
-const PROGRAM_TEMPLATES: Record<string, { name: string; description: string; goal: Program['goal']; duration: number; days: { name: string; dayOfWeek: number; exercises: { exerciseName: string; setNumber: number; targetReps: number; targetWeight: number }[] }[] }> = {
+interface TemplateExercise {
+  exerciseName: string;
+  setNumber: number;
+  targetReps: number;
+  targetWeight: number;
+  tempo?: string;
+  intensity?: string;
+  rest?: string;
+  notes?: string;
+}
+
+const PROGRAM_TEMPLATES: Record<string, { name: string; description: string; goal: Program['goal']; duration: number; days: { name: string; dayOfWeek: number; exercises: TemplateExercise[] }[] }> = {
   hypertrophy: {
-    name: 'Push/Pull/Legs',
-    description: '6-day split focusing on movement patterns for maximum hypertrophy',
+    name: 'FBB Push/Pull/Legs',
+    description: '6-day Functional Bodybuilding split with tempo prescriptions',
     goal: 'hypertrophy',
     duration: 8,
     days: [
       { name: 'Push A', dayOfWeek: 1, exercises: [
-        { exerciseName: 'Bench Press', setNumber: 4, targetReps: 8, targetWeight: 135 },
-        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 10, targetWeight: 95 },
-        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 12, targetWeight: 50 },
-        { exerciseName: 'Lateral Raises', setNumber: 3, targetReps: 15, targetWeight: 15 },
-        { exerciseName: 'Tricep Pushdowns', setNumber: 3, targetReps: 12, targetWeight: 40 },
+        { exerciseName: 'Bench Press', setNumber: 4, targetReps: 8, targetWeight: 135, tempo: '31X1', intensity: '2 RIR', rest: '90 sec', notes: 'Control eccentric, explode up' },
+        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 10, targetWeight: 95, tempo: '3010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 12, targetWeight: 50, tempo: '3111', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Lateral Raises', setNumber: 3, targetReps: 15, targetWeight: 15, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Tricep Pushdowns', setNumber: 3, targetReps: 12, targetWeight: 40, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Pull A', dayOfWeek: 2, exercises: [
-        { exerciseName: 'Deadlift', setNumber: 3, targetReps: 5, targetWeight: 225 },
-        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 8, targetWeight: 135 },
-        { exerciseName: 'Pull-ups', setNumber: 3, targetReps: 10, targetWeight: 0 },
-        { exerciseName: 'Face Pulls', setNumber: 3, targetReps: 15, targetWeight: 25 },
-        { exerciseName: 'Barbell Curls', setNumber: 3, targetReps: 12, targetWeight: 50 },
+        { exerciseName: 'Deadlift', setNumber: 3, targetReps: 5, targetWeight: 225, tempo: '10X0', intensity: '2 RIR', rest: '3-5 min', notes: 'Heavy strength work' },
+        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 8, targetWeight: 135, tempo: '31X1', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Pull-ups', setNumber: 3, targetReps: 10, targetWeight: 0, tempo: '20X0', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Face Pulls', setNumber: 3, targetReps: 15, targetWeight: 25, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Barbell Curls', setNumber: 3, targetReps: 12, targetWeight: 50, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Legs A', dayOfWeek: 3, exercises: [
-        { exerciseName: 'Squat', setNumber: 4, targetReps: 8, targetWeight: 185 },
-        { exerciseName: 'Romanian Deadlift', setNumber: 3, targetReps: 10, targetWeight: 155 },
-        { exerciseName: 'Leg Press', setNumber: 3, targetReps: 12, targetWeight: 270 },
-        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 12, targetWeight: 80 },
-        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 15, targetWeight: 70 },
+        { exerciseName: 'Squat', setNumber: 4, targetReps: 8, targetWeight: 185, tempo: '31X1', intensity: '2 RIR', rest: '2-3 min', notes: 'Full depth, controlled descent' },
+        { exerciseName: 'Romanian Deadlift', setNumber: 3, targetReps: 10, targetWeight: 155, tempo: '3110', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Leg Press', setNumber: 3, targetReps: 12, targetWeight: 270, tempo: '3010', intensity: '1 RIR', rest: '90 sec' },
+        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 12, targetWeight: 80, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 15, targetWeight: 70, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Push B', dayOfWeek: 4, exercises: [
-        { exerciseName: 'Overhead Press', setNumber: 4, targetReps: 8, targetWeight: 95 },
-        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 55 },
-        { exerciseName: 'Cable Flyes', setNumber: 3, targetReps: 12, targetWeight: 25 },
-        { exerciseName: 'Arnold Press', setNumber: 3, targetReps: 12, targetWeight: 35 },
-        { exerciseName: 'Skull Crushers', setNumber: 3, targetReps: 12, targetWeight: 50 },
+        { exerciseName: 'Overhead Press', setNumber: 4, targetReps: 8, targetWeight: 95, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 55, tempo: '3111', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Cable Flyes', setNumber: 3, targetReps: 12, targetWeight: 25, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Arnold Press', setNumber: 3, targetReps: 12, targetWeight: 35, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Skull Crushers', setNumber: 3, targetReps: 12, targetWeight: 50, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Pull B', dayOfWeek: 5, exercises: [
-        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 8, targetWeight: 145 },
-        { exerciseName: 'Lat Pulldown', setNumber: 3, targetReps: 10, targetWeight: 120 },
-        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 12, targetWeight: 100 },
-        { exerciseName: 'Rear Delt Flyes', setNumber: 3, targetReps: 15, targetWeight: 15 },
-        { exerciseName: 'Hammer Curls', setNumber: 3, targetReps: 12, targetWeight: 30 },
+        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 8, targetWeight: 145, tempo: '31X1', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Lat Pulldown', setNumber: 3, targetReps: 10, targetWeight: 120, tempo: '3010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 12, targetWeight: 100, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Rear Delt Flyes', setNumber: 3, targetReps: 15, targetWeight: 15, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Hammer Curls', setNumber: 3, targetReps: 12, targetWeight: 30, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Legs B', dayOfWeek: 6, exercises: [
-        { exerciseName: 'Leg Press', setNumber: 4, targetReps: 10, targetWeight: 315 },
-        { exerciseName: 'Lunges', setNumber: 3, targetReps: 10, targetWeight: 40 },
-        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 12, targetWeight: 80 },
-        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 12, targetWeight: 70 },
-        { exerciseName: 'Cable Crunches', setNumber: 3, targetReps: 15, targetWeight: 60 },
+        { exerciseName: 'Leg Press', setNumber: 4, targetReps: 10, targetWeight: 315, tempo: '3010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Bulgarian Split Squats', setNumber: 3, targetReps: 10, targetWeight: 40, tempo: '3111', intensity: '2 RIR', rest: '90 sec', notes: '10 per leg' },
+        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 12, targetWeight: 80, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 12, targetWeight: 70, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Cable Crunches', setNumber: 3, targetReps: 15, targetWeight: 60, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
       ]},
     ],
   },
   strength: {
-    name: 'Upper/Lower',
-    description: '4-day balanced program for building strength',
+    name: 'Upper/Lower Strength',
+    description: '4-day balanced program for building strength with controlled tempos',
     goal: 'strength',
     duration: 8,
     days: [
       { name: 'Upper A', dayOfWeek: 1, exercises: [
-        { exerciseName: 'Bench Press', setNumber: 5, targetReps: 5, targetWeight: 165 },
-        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 6, targetWeight: 145 },
-        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 8, targetWeight: 95 },
-        { exerciseName: 'Pull-ups', setNumber: 3, targetReps: 8, targetWeight: 0 },
-        { exerciseName: 'Barbell Curls', setNumber: 2, targetReps: 10, targetWeight: 50 },
+        { exerciseName: 'Bench Press', setNumber: 5, targetReps: 5, targetWeight: 165, tempo: '20X0', intensity: '2 RIR', rest: '3-5 min', notes: 'Heavy strength focus' },
+        { exerciseName: 'Barbell Rows', setNumber: 4, targetReps: 6, targetWeight: 145, tempo: '20X1', intensity: '2 RIR', rest: '3 min' },
+        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 8, targetWeight: 95, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Pull-ups', setNumber: 3, targetReps: 8, targetWeight: 0, tempo: '20X0', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Barbell Curls', setNumber: 2, targetReps: 10, targetWeight: 50, tempo: '3010', intensity: '1 RIR', rest: '90 sec' },
       ]},
       { name: 'Lower A', dayOfWeek: 2, exercises: [
-        { exerciseName: 'Squat', setNumber: 5, targetReps: 5, targetWeight: 225 },
-        { exerciseName: 'Romanian Deadlift', setNumber: 3, targetReps: 8, targetWeight: 185 },
-        { exerciseName: 'Leg Press', setNumber: 3, targetReps: 10, targetWeight: 315 },
-        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 10, targetWeight: 80 },
-        { exerciseName: 'Planks', setNumber: 3, targetReps: 60, targetWeight: 0 },
+        { exerciseName: 'Squat', setNumber: 5, targetReps: 5, targetWeight: 225, tempo: '20X0', intensity: '2 RIR', rest: '3-5 min', notes: 'Brace hard, full depth' },
+        { exerciseName: 'Romanian Deadlift', setNumber: 3, targetReps: 8, targetWeight: 185, tempo: '3110', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Leg Press', setNumber: 3, targetReps: 10, targetWeight: 315, tempo: '3010', intensity: '1 RIR', rest: '90 sec' },
+        { exerciseName: 'Leg Curls', setNumber: 3, targetReps: 10, targetWeight: 80, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Planks', setNumber: 3, targetReps: 60, targetWeight: 0, rest: '60 sec', notes: '60 seconds hold' },
       ]},
       { name: 'Upper B', dayOfWeek: 4, exercises: [
-        { exerciseName: 'Overhead Press', setNumber: 5, targetReps: 5, targetWeight: 105 },
-        { exerciseName: 'Pull-ups', setNumber: 4, targetReps: 6, targetWeight: 0 },
-        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 55 },
-        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 10, targetWeight: 100 },
-        { exerciseName: 'Tricep Pushdowns', setNumber: 2, targetReps: 12, targetWeight: 40 },
+        { exerciseName: 'Overhead Press', setNumber: 5, targetReps: 5, targetWeight: 105, tempo: '20X0', intensity: '2 RIR', rest: '3-5 min' },
+        { exerciseName: 'Pull-ups', setNumber: 4, targetReps: 6, targetWeight: 0, tempo: '20X0', intensity: '2 RIR', rest: '3 min' },
+        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 55, tempo: '31X1', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 10, targetWeight: 100, tempo: '2011', intensity: '1 RIR', rest: '90 sec' },
+        { exerciseName: 'Tricep Pushdowns', setNumber: 2, targetReps: 12, targetWeight: 40, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Lower B', dayOfWeek: 5, exercises: [
-        { exerciseName: 'Deadlift', setNumber: 5, targetReps: 5, targetWeight: 275 },
-        { exerciseName: 'Squat', setNumber: 3, targetReps: 8, targetWeight: 185 },
-        { exerciseName: 'Lunges', setNumber: 3, targetReps: 10, targetWeight: 40 },
-        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 12, targetWeight: 70 },
-        { exerciseName: 'Hanging Leg Raises', setNumber: 3, targetReps: 12, targetWeight: 0 },
+        { exerciseName: 'Deadlift', setNumber: 5, targetReps: 5, targetWeight: 275, tempo: '10X0', intensity: '2 RIR', rest: '3-5 min', notes: 'Reset each rep from floor' },
+        { exerciseName: 'Front Squat', setNumber: 3, targetReps: 8, targetWeight: 155, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Lunges', setNumber: 3, targetReps: 10, targetWeight: 40, tempo: '2010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Leg Extensions', setNumber: 3, targetReps: 12, targetWeight: 70, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Hanging Leg Raises', setNumber: 3, targetReps: 12, targetWeight: 0, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
+      ]},
+    ],
+  },
+  crossfit: {
+    name: 'Hybrid FBB + CrossFit',
+    description: '5-day hybrid program combining FBB strength with CrossFit conditioning',
+    goal: 'crossfit',
+    duration: 8,
+    days: [
+      { name: 'Strength + Metcon', dayOfWeek: 1, exercises: [
+        { exerciseName: 'Squat', setNumber: 4, targetReps: 6, targetWeight: 205, tempo: '31X1', intensity: '2 RIR', rest: '3 min', notes: 'Primary strength' },
+        { exerciseName: 'Romanian Deadlift', setNumber: 3, targetReps: 10, targetWeight: 155, tempo: '3110', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Wall Balls', setNumber: 3, targetReps: 15, targetWeight: 20, rest: '60 sec', notes: 'AMRAP 12 min finisher: 15 WB + 10 burpees' },
+      ]},
+      { name: 'Upper Push/Pull', dayOfWeek: 2, exercises: [
+        { exerciseName: 'Bench Press', setNumber: 4, targetReps: 8, targetWeight: 145, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Pull-ups', setNumber: 4, targetReps: 8, targetWeight: 0, tempo: '20X0', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Filly Press', setNumber: 3, targetReps: 10, targetWeight: 35, tempo: '3010', intensity: '2 RIR', rest: '90 sec', notes: 'KB rack hold + DB Arnold press' },
+        { exerciseName: 'Rowing', setNumber: 1, targetReps: 1, targetWeight: 0, rest: '0', notes: 'EMOM 10 min: 15/12 cal row' },
+      ]},
+      { name: 'Olympic + Engine', dayOfWeek: 3, exercises: [
+        { exerciseName: 'Power Clean', setNumber: 5, targetReps: 3, targetWeight: 155, tempo: '10X0', intensity: 'RPE 8', rest: '2-3 min', notes: 'Focus on hip extension' },
+        { exerciseName: 'Front Squat', setNumber: 3, targetReps: 5, targetWeight: 165, tempo: '31X1', intensity: '2 RIR', rest: '2-3 min' },
+        { exerciseName: 'Thrusters', setNumber: 3, targetReps: 10, targetWeight: 95, rest: '90 sec', notes: 'For Time: 21-15-9 thrusters + pull-ups' },
+      ]},
+      { name: 'FBB Accessories', dayOfWeek: 5, exercises: [
+        { exerciseName: 'Bulgarian Split Squats', setNumber: 3, targetReps: 10, targetWeight: 40, tempo: '3111', intensity: '2 RIR', rest: '90 sec', notes: '10 per leg, offset load' },
+        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 12, targetWeight: 100, tempo: '2011', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Lateral Raises', setNumber: 3, targetReps: 15, targetWeight: 15, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Assault Bike', setNumber: 1, targetReps: 1, targetWeight: 0, notes: 'Tabata: 20s max / 10s rest x 8 rounds' },
+      ]},
+      { name: 'Competition Sim', dayOfWeek: 6, exercises: [
+        { exerciseName: 'Deadlift', setNumber: 3, targetReps: 5, targetWeight: 275, tempo: '10X0', intensity: '2 RIR', rest: '3 min' },
+        { exerciseName: 'Box Jumps', setNumber: 3, targetReps: 10, targetWeight: 0, rest: '60 sec', notes: 'Step down for safety' },
+        { exerciseName: 'Burpees', setNumber: 1, targetReps: 1, targetWeight: 0, notes: 'For Time: 1-mile run + 100 pull-ups + 200 push-ups + 300 squats + 1-mile run (scaled)' },
       ]},
     ],
   },
   general: {
-    name: 'Full Body',
-    description: '3-day program for busy schedules covering all major muscle groups',
+    name: 'Full Body FBB',
+    description: '3-day program for busy schedules with tempo and structural balance',
     goal: 'general',
     duration: 8,
     days: [
       { name: 'Full Body A', dayOfWeek: 1, exercises: [
-        { exerciseName: 'Squat', setNumber: 3, targetReps: 8, targetWeight: 155 },
-        { exerciseName: 'Bench Press', setNumber: 3, targetReps: 8, targetWeight: 135 },
-        { exerciseName: 'Barbell Rows', setNumber: 3, targetReps: 10, targetWeight: 115 },
-        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 10, targetWeight: 75 },
-        { exerciseName: 'Barbell Curls', setNumber: 2, targetReps: 12, targetWeight: 40 },
+        { exerciseName: 'Squat', setNumber: 3, targetReps: 8, targetWeight: 155, tempo: '31X1', intensity: '2 RIR', rest: '2 min', notes: 'Controlled descent, explode up' },
+        { exerciseName: 'Bench Press', setNumber: 3, targetReps: 8, targetWeight: 135, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Barbell Rows', setNumber: 3, targetReps: 10, targetWeight: 115, tempo: '2011', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Overhead Press', setNumber: 3, targetReps: 10, targetWeight: 75, tempo: '3010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Barbell Curls', setNumber: 2, targetReps: 12, targetWeight: 40, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
       ]},
       { name: 'Full Body B', dayOfWeek: 3, exercises: [
-        { exerciseName: 'Deadlift', setNumber: 3, targetReps: 5, targetWeight: 205 },
-        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 45 },
-        { exerciseName: 'Lat Pulldown', setNumber: 3, targetReps: 10, targetWeight: 100 },
-        { exerciseName: 'Lunges', setNumber: 3, targetReps: 10, targetWeight: 30 },
-        { exerciseName: 'Planks', setNumber: 3, targetReps: 45, targetWeight: 0 },
+        { exerciseName: 'Deadlift', setNumber: 3, targetReps: 5, targetWeight: 205, tempo: '10X0', intensity: '2 RIR', rest: '3-5 min', notes: 'Reset each rep' },
+        { exerciseName: 'Incline Dumbbell Press', setNumber: 3, targetReps: 10, targetWeight: 45, tempo: '3111', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Lat Pulldown', setNumber: 3, targetReps: 10, targetWeight: 100, tempo: '3010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Lunges', setNumber: 3, targetReps: 10, targetWeight: 30, tempo: '2010', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Planks', setNumber: 3, targetReps: 45, targetWeight: 0, rest: '60 sec', notes: '45 seconds hold' },
       ]},
       { name: 'Full Body C', dayOfWeek: 5, exercises: [
-        { exerciseName: 'Leg Press', setNumber: 3, targetReps: 10, targetWeight: 270 },
-        { exerciseName: 'Dips', setNumber: 3, targetReps: 10, targetWeight: 0 },
-        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 10, targetWeight: 80 },
-        { exerciseName: 'Lateral Raises', setNumber: 3, targetReps: 15, targetWeight: 15 },
-        { exerciseName: 'Hammer Curls', setNumber: 2, targetReps: 12, targetWeight: 25 },
+        { exerciseName: 'Front Squat', setNumber: 3, targetReps: 10, targetWeight: 135, tempo: '31X1', intensity: '2 RIR', rest: '2 min' },
+        { exerciseName: 'Dips', setNumber: 3, targetReps: 10, targetWeight: 0, tempo: '31X1', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Cable Rows', setNumber: 3, targetReps: 10, targetWeight: 80, tempo: '2011', intensity: '2 RIR', rest: '90 sec' },
+        { exerciseName: 'Lateral Raises', setNumber: 3, targetReps: 15, targetWeight: 15, tempo: '2010', intensity: '1 RIR', rest: '60 sec' },
+        { exerciseName: 'Hammer Curls', setNumber: 2, targetReps: 12, targetWeight: 25, tempo: '3010', intensity: '1 RIR', rest: '60 sec' },
       ]},
     ],
   },
@@ -159,6 +205,10 @@ function templateToWorkoutDays(template: typeof PROGRAM_TEMPLATES[string]): Work
       targetReps: ex.targetReps,
       targetWeight: ex.targetWeight,
       completed: false,
+      tempo: ex.tempo || '',
+      intensity: ex.intensity || '',
+      rest: ex.rest || '',
+      notes: ex.notes || '',
     })),
   }));
 }
@@ -180,6 +230,8 @@ export default function ProgramBuilder() {
   const [workoutDays, setWorkoutDays] = useState<WorkoutDay[]>(
     existingProgram?.workoutDays || (template ? templateToWorkoutDays(template) : [])
   );
+  const [trainingStyle, setTrainingStyle] = useState('Functional Bodybuilding');
+  const [injuries, setInjuries] = useState('');
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -242,6 +294,10 @@ export default function ProgramBuilder() {
       targetReps: 10,
       targetWeight: 0,
       completed: false,
+      tempo: '',
+      intensity: '',
+      rest: '',
+      notes: '',
     };
 
     setWorkoutDays(
@@ -306,6 +362,8 @@ export default function ProgramBuilder() {
         daysPerWeek: workoutDays.length || 4,
         experienceLevel: 'intermediate',
         equipment: ['Barbell', 'Dumbbell', 'Cable Machine', 'Machine'],
+        trainingStyle,
+        injuries: injuries || undefined,
       });
       setName(result.name || name);
       setDescription(result.description || description);
@@ -319,10 +377,15 @@ export default function ProgramBuilder() {
               id: uuidv4(),
               exerciseId: uuidv4(),
               exerciseName: ex.exerciseName,
-              setNumber: ex.setNumber || 3,
-              targetReps: ex.targetReps || 10,
+              setNumber: ex.setNumber || ex.sets || 3,
+              targetReps: ex.targetReps || parseInt(String(ex.reps)) || 10,
               targetWeight: ex.targetWeight || 0,
               completed: false,
+              tempo: ex.tempo || '',
+              intensity: ex.intensity || '',
+              rest: ex.rest || '',
+              reps: ex.reps || '',
+              notes: ex.notes || '',
             })),
           }))
         );
@@ -428,6 +491,8 @@ export default function ProgramBuilder() {
               <option value="hypertrophy">Hypertrophy</option>
               <option value="powerlifting">Powerlifting</option>
               <option value="bodybuilding">Bodybuilding</option>
+              <option value="crossfit">CrossFit</option>
+              <option value="hybrid">Hybrid</option>
               <option value="general">General Fitness</option>
             </select>
           </div>
@@ -453,6 +518,32 @@ export default function ProgramBuilder() {
               onChange={(e) => { setDuration(Math.min(52, Math.max(1, parseInt(e.target.value) || 1))); markDirty(); }}
               min={1}
               max={52}
+              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label htmlFor="training-style" className="block text-sm text-gray-400 mb-2">Training Style</label>
+            <select
+              id="training-style"
+              value={trainingStyle}
+              onChange={(e) => { setTrainingStyle(e.target.value); markDirty(); }}
+              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
+            >
+              {TRAINING_STYLES.map((style) => (
+                <option key={style} value={style}>{style}</option>
+              ))}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="injuries" className="block text-sm text-gray-400 mb-2">
+              Injuries / Limitations (optional)
+            </label>
+            <input
+              id="injuries"
+              type="text"
+              value={injuries}
+              onChange={(e) => { setInjuries(e.target.value); markDirty(); }}
+              placeholder="e.g., Lower back pain, shoulder impingement"
               className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
             />
           </div>
@@ -568,93 +659,141 @@ export default function ProgramBuilder() {
                       {day.exercises.map((exercise, idx) => (
                         <div
                           key={exercise.id}
-                          className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg"
+                          className="p-3 bg-gray-800/50 rounded-lg space-y-2"
                         >
-                          <span className="text-sm text-gray-500 w-6">
-                            {idx + 1}.
-                          </span>
-                          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
-                            <input
-                              type="text"
-                              value={exercise.exerciseName}
-                              onChange={(e) =>
-                                updateExercise(day.id, exercise.id, {
-                                  exerciseName: e.target.value,
-                                })
-                              }
-                              placeholder="Exercise name"
-                              className="col-span-2 md:col-span-1 px-3 py-2 bg-gray-700/50 rounded-lg text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
-                              list={`exercises-${day.id}`}
-                              aria-label="Exercise name"
-                            />
-                            <datalist id={`exercises-${day.id}`}>
-                              {MUSCLE_GROUPS.flatMap((g) => g.exercises).map(
-                                (ex) => (
-                                  <option key={ex} value={ex} />
-                                )
-                              )}
-                            </datalist>
-                            <div className="flex items-center gap-1">
+                          {/* Row 1: Name, Sets, Reps, Weight, Actions */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-gray-500 w-6">
+                              {idx + 1}.
+                            </span>
+                            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
                               <input
-                                type="number"
-                                value={exercise.setNumber}
+                                type="text"
+                                value={exercise.exerciseName}
                                 onChange={(e) =>
                                   updateExercise(day.id, exercise.id, {
-                                    setNumber: parseInt(e.target.value) || 1,
+                                    exerciseName: e.target.value,
                                   })
                                 }
-                                min={1}
-                                className="w-16 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
-                                aria-label="Number of sets"
+                                placeholder="Exercise name"
+                                className="col-span-2 md:col-span-1 px-3 py-2 bg-gray-700/50 rounded-lg text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+                                list={`exercises-${day.id}`}
+                                aria-label="Exercise name"
                               />
-                              <span className="text-sm text-gray-500">sets</span>
+                              <datalist id={`exercises-${day.id}`}>
+                                {MUSCLE_GROUPS.flatMap((g) => g.exercises).map(
+                                  (ex) => (
+                                    <option key={ex} value={ex} />
+                                  )
+                                )}
+                              </datalist>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={exercise.setNumber}
+                                  onChange={(e) =>
+                                    updateExercise(day.id, exercise.id, {
+                                      setNumber: parseInt(e.target.value) || 1,
+                                    })
+                                  }
+                                  min={1}
+                                  className="w-16 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+                                  aria-label="Number of sets"
+                                />
+                                <span className="text-sm text-gray-500">sets</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={exercise.reps || String(exercise.targetReps)}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    updateExercise(day.id, exercise.id, {
+                                      reps: val,
+                                      targetReps: parseInt(val) || exercise.targetReps,
+                                    });
+                                  }}
+                                  placeholder="8-10"
+                                  className="w-16 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+                                  aria-label="Target reps"
+                                />
+                                <span className="text-sm text-gray-500">reps</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={exercise.targetWeight}
+                                  onChange={(e) =>
+                                    updateExercise(day.id, exercise.id, {
+                                      targetWeight: parseInt(e.target.value) || 0,
+                                    })
+                                  }
+                                  min={0}
+                                  className="w-20 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+                                  aria-label="Target weight"
+                                />
+                                <span className="text-sm text-gray-500">lbs</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={exercise.targetReps}
-                                onChange={(e) =>
-                                  updateExercise(day.id, exercise.id, {
-                                    targetReps: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                min={0}
-                                className="w-16 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
-                                aria-label="Target reps"
-                              />
-                              <span className="text-sm text-gray-500">reps</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={exercise.targetWeight}
-                                onChange={(e) =>
-                                  updateExercise(day.id, exercise.id, {
-                                    targetWeight: parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                min={0}
-                                className="w-20 px-2 py-2 bg-gray-700/50 rounded-lg text-sm text-center focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
-                                aria-label="Target weight"
-                              />
-                              <span className="text-sm text-gray-500">lbs</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => duplicateSet(day.id, exercise)}
+                                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                                aria-label="Duplicate set"
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => removeExercise(day.id, exercise.id)}
+                                className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                                aria-label="Remove exercise"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => duplicateSet(day.id, exercise)}
-                              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                              aria-label="Duplicate set"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => removeExercise(day.id, exercise.id)}
-                              className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                              aria-label="Remove exercise"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          {/* Row 2: Tempo, Intensity, Rest, Notes */}
+                          <div className="ml-9 grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <input
+                              type="text"
+                              value={exercise.tempo || ''}
+                              onChange={(e) =>
+                                updateExercise(day.id, exercise.id, { tempo: e.target.value })
+                              }
+                              placeholder="Tempo (31X1)"
+                              className="px-2 py-1.5 bg-gray-700/30 rounded-lg text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500 text-cyan-400 placeholder:text-gray-600"
+                              aria-label="Tempo"
+                            />
+                            <input
+                              type="text"
+                              value={exercise.intensity || ''}
+                              onChange={(e) =>
+                                updateExercise(day.id, exercise.id, { intensity: e.target.value })
+                              }
+                              placeholder="Intensity (2 RIR)"
+                              className="px-2 py-1.5 bg-gray-700/30 rounded-lg text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500 text-orange-400 placeholder:text-gray-600"
+                              aria-label="Intensity"
+                            />
+                            <input
+                              type="text"
+                              value={exercise.rest || ''}
+                              onChange={(e) =>
+                                updateExercise(day.id, exercise.id, { rest: e.target.value })
+                              }
+                              placeholder="Rest (90 sec)"
+                              className="px-2 py-1.5 bg-gray-700/30 rounded-lg text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500 text-yellow-400 placeholder:text-gray-600"
+                              aria-label="Rest period"
+                            />
+                            <input
+                              type="text"
+                              value={exercise.notes || ''}
+                              onChange={(e) =>
+                                updateExercise(day.id, exercise.id, { notes: e.target.value })
+                              }
+                              placeholder="Notes"
+                              className="px-2 py-1.5 bg-gray-700/30 rounded-lg text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-500 text-gray-400 placeholder:text-gray-600"
+                              aria-label="Exercise notes"
+                            />
                           </div>
                         </div>
                       ))}

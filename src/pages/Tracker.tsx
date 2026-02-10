@@ -83,8 +83,23 @@ export default function Tracker() {
     return () => clearInterval(interval);
   }, [restTimerActive, restTimer]);
 
-  const startRestTimer = () => {
-    setRestTimer(restDuration);
+  /** Parse rest string like "2-3 min", "90 sec", "90s", "2 min" to seconds */
+  const parseRestDuration = (restStr: string): number => {
+    const s = restStr.toLowerCase().trim();
+    // "90 sec" or "90s"
+    const secMatch = s.match(/^(\d+)\s*s(ec)?/);
+    if (secMatch) return parseInt(secMatch[1]);
+    // "2-3 min" — take the lower bound
+    const rangeMinMatch = s.match(/^(\d+)-\d+\s*min/);
+    if (rangeMinMatch) return parseInt(rangeMinMatch[1]) * 60;
+    // "2 min" or "3min"
+    const minMatch = s.match(/^(\d+)\s*min/);
+    if (minMatch) return parseInt(minMatch[1]) * 60;
+    return 0;
+  };
+
+  const startRestTimer = (customDuration?: number) => {
+    setRestTimer(customDuration || restDuration);
     setRestTimerActive(true);
   };
 
@@ -151,6 +166,11 @@ export default function Tracker() {
         set.actualWeight || set.targetWeight,
         set.rpe
       );
+      // Auto-start rest timer with prescribed duration
+      if (set.rest) {
+        const dur = parseRestDuration(set.rest);
+        if (dur > 0) startRestTimer(dur);
+      }
     }
   };
 
@@ -298,7 +318,7 @@ export default function Tracker() {
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={startRestTimer}
+                onClick={() => startRestTimer()}
                 className="flex items-center gap-1 text-sm px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
               >
                 <Pause className="w-3 h-3" />
@@ -540,6 +560,32 @@ function SetCard({
           </select>
         </div>
       </div>
+
+      {/* Tempo / Intensity / Rest badges */}
+      {(set.tempo || set.intensity || set.rest) && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {set.tempo && (
+            <span className="text-xs px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded-full">
+              {set.tempo}
+            </span>
+          )}
+          {set.intensity && (
+            <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded-full">
+              {set.intensity}
+            </span>
+          )}
+          {set.rest && (
+            <span className="text-xs px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-full">
+              Rest: {set.rest}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Exercise notes */}
+      {set.notes && (
+        <p className="mt-1.5 text-xs text-gray-500 italic">{set.notes}</p>
+      )}
 
       <button
         onClick={onComplete}

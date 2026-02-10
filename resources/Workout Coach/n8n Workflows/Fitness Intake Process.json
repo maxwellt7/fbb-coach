@@ -1,0 +1,384 @@
+{
+  "name": "Fitness Intake Process",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 5,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "event": "pagedUpdatedInDatabase",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e6534dddc5680789a18d7c4fc53d935",
+          "mode": "id"
+        }
+      },
+      "id": "c6f7739e-b8c2-4452-8c30-4dc7afc6e1ee",
+      "name": "Notion Database Changes",
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        2352,
+        528
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "statusPropertyName",
+              "value": "={{ $json.Status }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "4562cad0-9afe-4753-9845-bf2cdea78924",
+      "name": "Workflow Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2576,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Skipped",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "1ccfcfc4-782e-4990-b5b6-7d1f0b77fc21",
+      "name": "Filter Status Changes",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        2800,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e6534dd-dc56-8078-9a18-d7c4fc53d935",
+          "mode": "list",
+          "cachedResultName": "Workouts",
+          "cachedResultUrl": "https://www.notion.so/2e6534dddc5680789a18d7c4fc53d935"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "f3510cbe-ae45-47af-b904-06bdbcdaa0ce",
+      "name": "Get Page Blocks",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3024,
+        528
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "fitness-programming",
+          "mode": "list",
+          "cachedResultName": "fitness-programming"
+        },
+        "embeddingBatchSize": 500,
+        "options": {
+          "pineconeNamespace": "fitness-workouts"
+        }
+      },
+      "id": "ae9581b7-61bb-4061-b97a-7ea00f30f8dd",
+      "name": "Store in Pinecone",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        3600,
+        528
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "dqeTM6ovzfLNvmSD",
+          "name": "AI Agents"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "dimensions": 1024
+        }
+      },
+      "id": "98620bf8-86c8-4eb2-ae3d-f7b2f2204d01",
+      "name": "OpenAI Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        3552,
+        752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cdlhLftOABejQ9Ov",
+          "name": "Gregersen Properties"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Workout blocks data: {{ JSON.stringify($json) }}\n\nPage ID: {{ $('Filter Status Changes').first().json.id }}\nStatus: {{ $('Filter Status Changes').first().json.Status }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a fitness data extraction specialist. Your task is to analyze workout data from Notion and extract relevant information into semantically meaningful chunks.\n\nYour responsibilities:\n1. Analyze the workout blocks data provided\n2. Extract key information including:\n   - Workout type and category\n   - Exercises performed (planned vs actual)\n   - Sets, reps, and weights\n   - Duration and intensity\n   - Notes and observations\n   - Completion status\n3. Create semantically relevant chunks that group related information together\n4. Each chunk should be self-contained and meaningful for retrieval\n5. Include metadata context (page ID, status, timestamp) with each chunk\n\nReturn the data in the following JSON structure:\n{\n  \"chunks\": [\n    {\n      \"content\": \"The actual workout information text\",\n      \"category\": \"overview|exercise|notes|performance\",\n      \"pageId\": \"The Notion page ID\",\n      \"status\": \"The workout status\"\n    }\n  ]\n}\n\nEach chunk should be a complete, contextual piece of information that can stand alone for vector search and retrieval."
+        }
+      },
+      "id": "b006abd2-e37d-43ca-a705-737b9d9bcf26",
+      "name": "Process Workout Data",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3248,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "61bd8384-2648-41aa-aa4b-486a3988c06d",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        3256,
+        752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cdlhLftOABejQ9Ov",
+          "name": "Gregersen Properties"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e12bdf82-dbd0-4623-8db6-200f561daab7",
+      "name": "Document Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        3736,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"chunks\": [\n\t\t{\n\t\t\t\"content\": \"Workout overview: Upper body strength training session\",\n\t\t\t\"category\": \"overview\",\n\t\t\t\"pageId\": \"123\",\n\t\t\t\"status\": \"Completed\"\n\t\t},\n\t\t{\n\t\t\t\"content\": \"Exercise 1: Bench Press - 4 sets of 8 reps at 185lbs\",\n\t\t\t\"category\": \"exercise\",\n\t\t\t\"pageId\": \"123\",\n\t\t\t\"status\": \"Completed\"\n\t\t}\n\t]\n}"
+      },
+      "id": "10fea780-fe9b-4fc6-b128-1bfeff416b44",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3384,
+        752
+      ]
+    }
+  ],
+  "pinData": {
+    "Notion Database Changes": [
+      {
+        "json": {
+          "id": "2e6534dd-dc56-812f-947c-c7a4b2e19f9c",
+          "Week Number": 1,
+          "Status": "Completed",
+          "User Feedback/Notes": "Solid workout. And solid timing. ",
+          "RPE (1-10)": 7,
+          "Day Number": 1,
+          "Date": {
+            "start": "2026-01-12",
+            "end": null,
+            "time_zone": null
+          },
+          "Workout Name": "Lower Body Strength + Glycolytic Conditioning"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Notion Database Changes": {
+      "main": [
+        [
+          {
+            "node": "Workflow Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Configuration": {
+      "main": [
+        [
+          {
+            "node": "Filter Status Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Status Changes": {
+      "main": [
+        [
+          {
+            "node": "Get Page Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Page Blocks": {
+      "main": [
+        [
+          {
+            "node": "Process Workout Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Store in Pinecone",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Workout Data": {
+      "main": [
+        [
+          {
+            "node": "Store in Pinecone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Process Workout Data",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Store in Pinecone",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Process Workout Data",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "14a25c51-0860-4d40-8e37-7fcd27cd55b7",
+  "meta": {
+    "instanceId": "b4dab6bc82354797802e6d1ee2c1fe486aa8455b89929a584692526a2b575109"
+  },
+  "id": "D4rrFwudvce4uvZM",
+  "tags": []
+}

@@ -56,19 +56,36 @@ export interface GenerateProgramParams {
   daysPerWeek: number;
   experienceLevel: string;
   equipment: string[];
+  trainingStyle?: string;
+  injuries?: string;
 }
 
 export interface GeneratedProgram {
   name: string;
   description: string;
+  programOverview?: {
+    goal: string;
+    style: string;
+    level: string;
+    cycleLength: string;
+    frequency: string;
+  };
   workoutDays: {
     name: string;
     dayOfWeek: number;
+    weekNumber?: number;
+    dayNumber?: number;
     exercises: {
       exerciseName: string;
       setNumber: number;
       targetReps: number;
       targetWeight: number;
+      sets?: number;
+      reps?: string;
+      tempo?: string;
+      intensity?: string;
+      rest?: string;
+      notes?: string;
     }[];
   }[];
 }

@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync } from 'fs';
 import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { CohereClient } from 'cohere-ai';
@@ -78,69 +79,16 @@ if (process.env.NOTION_API_KEY) {
 const NOTION_CLIENT_DB_ID = process.env.NOTION_CLIENT_DB_ID;
 const NOTION_WORKOUT_TRACKER_DB_ID = process.env.NOTION_WORKOUT_TRACKER_DB_ID;
 
-// --- System Prompt ---
-const SYSTEM_PROMPT = `You are FBB Coach, an expert AI fitness coach specializing in bodybuilding, powerlifting, and general strength training. You have deep knowledge in:
-
-- Exercise science and biomechanics
-- Program design (periodization, volume management, exercise selection)
-- Nutrition for muscle building and fat loss
-- Recovery and injury prevention
-- Training techniques and form cues
-
-Your communication style is:
-- Knowledgeable but approachable
-- Concise and actionable
-- Evidence-based when possible
-- Encouraging but realistic
-
-When asked about programs or exercises:
-- Provide specific set/rep schemes
-- Include rest period recommendations
-- Explain the reasoning behind your recommendations
-- Consider the user's experience level and goals
-
-When the user provides their workout data (stats, recent workouts, active program), use this information to give personalized advice. If user profile data is available, tailor recommendations to their specific metrics and goals.
-
-Always prioritize safety and proper form over ego lifting.`;
-
-// --- Fitness Knowledge Base (fallback) ---
-const FITNESS_KNOWLEDGE = {
-  hypertrophy: `Hypertrophy training focuses on muscle growth through moderate weights (60-80% 1RM) and higher volume (8-12 reps, 3-5 sets). Key principles:
-- Time under tension: 30-60 seconds per set
-- Progressive overload: Increase weight or reps over time
-- Adequate volume: 10-20 sets per muscle group per week
-- Rest periods: 60-90 seconds between sets
-- Mind-muscle connection for optimal fiber recruitment`,
-
-  strength: `Strength training prioritizes force production with heavy loads (80-95% 1RM) and lower reps (1-5). Key principles:
-- Compound movements: Squat, Bench, Deadlift, Overhead Press
-- Longer rest periods: 3-5 minutes for neural recovery
-- Lower volume per session, higher frequency
-- Progressive overload through weight increases
-- Focus on technique under heavy loads`,
-
-  periodization: `Periodization is systematic planning of training phases:
-- Linear: Gradual increase in intensity, decrease in volume
-- Undulating: Daily or weekly variation in intensity/volume
-- Block: Concentrated training blocks (accumulation, transmutation, realization)
-- Deload weeks: Every 4-8 weeks to allow recovery
-- Mesocycles typically 4-6 weeks`,
-
-  recovery: `Recovery is essential for muscle growth and performance:
-- Sleep: 7-9 hours for optimal hormone production
-- Nutrition: Protein timing, adequate calories
-- Active recovery: Light movement, stretching
-- Deload weeks: Reduced volume/intensity
-- Stress management: Cortisol impacts recovery`,
-
-  exercises: {
-    chest: ['Bench Press', 'Incline Dumbbell Press', 'Cable Flyes', 'Dips', 'Push-ups'],
-    back: ['Deadlift', 'Barbell Rows', 'Pull-ups', 'Lat Pulldown', 'Cable Rows'],
-    shoulders: ['Overhead Press', 'Lateral Raises', 'Face Pulls', 'Rear Delt Flyes'],
-    legs: ['Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Lunges'],
-    arms: ['Barbell Curls', 'Tricep Pushdowns', 'Hammer Curls', 'Skull Crushers'],
-  },
-};
+// --- System Prompt (loaded from resources) ---
+let SYSTEM_PROMPT;
+try {
+  const promptPath = join(__dirname, '../resources/Functional Bodybuilding & CrossFit Programming System Prompt .md');
+  SYSTEM_PROMPT = readFileSync(promptPath, 'utf-8');
+  console.log('System prompt loaded from resources file');
+} catch {
+  console.log('Resources file not found, using fallback system prompt');
+  SYSTEM_PROMPT = `You are FBB Coach, an expert AI fitness coach specializing in Functional Bodybuilding and CrossFit methodologies. You follow Marcus Filly's "Look Good, Move Well" philosophy. You have deep knowledge in exercise science, program design (periodization, volume management, tempo prescriptions), nutrition, recovery, and training techniques. Always specify tempo (e.g. 31X1), rest periods, and RPE/RIR targets. Prioritize movement quality and safety.`;
+}
 
 // --- Helper: Extract Notion property value ---
 function getNotionValue(property) {
@@ -243,51 +191,51 @@ async function fetchNotionWorkouts(limit = 20) {
 
 // --- Helper: Search Pinecone knowledge base ---
 async function searchKnowledge(query) {
-  if (pineconeIndex && cohere) {
+  if (!pineconeIndex || !cohere) return '';
+
+  try {
+    const embeddingResponse = await cohere.embed({
+      texts: [query],
+      model: 'embed-english-v3.0',
+      inputType: 'search_query',
+    });
+
+    const queryEmbedding = embeddingResponse.embeddings[0];
+
+    const searchResults = await pineconeIndex.query({
+      vector: queryEmbedding,
+      topK: 10,
+      includeMetadata: true,
+    });
+
+    if (!searchResults.matches || searchResults.matches.length === 0) return '';
+
+    const documents = searchResults.matches
+      .map(match => match.metadata?.text || match.metadata?.content || '')
+      .filter(text => text.length > 0);
+
+    if (documents.length === 0) return '';
+
+    // Rerank with Cohere for higher relevance
     try {
-      const embeddingResponse = await cohere.embed({
-        texts: [query],
-        model: 'embed-english-v3.0',
-        inputType: 'search_query',
+      const rerankResponse = await cohere.rerank({
+        query,
+        documents,
+        model: 'rerank-english-v3.0',
+        topN: 5,
       });
 
-      const queryEmbedding = embeddingResponse.embeddings[0];
-
-      const searchResults = await pineconeIndex.query({
-        vector: queryEmbedding,
-        topK: 5,
-        includeMetadata: true,
-      });
-
-      if (searchResults.matches && searchResults.matches.length > 0) {
-        return searchResults.matches
-          .map(match => match.metadata?.text || match.metadata?.content || '')
-          .filter(text => text.length > 0)
-          .join('\n\n');
-      }
-    } catch (error) {
-      console.error('Pinecone search error:', error.message);
+      return rerankResponse.results
+        .map(r => documents[r.index])
+        .join('\n\n');
+    } catch (rerankError) {
+      console.error('Cohere rerank error (falling back to raw results):', rerankError.message);
+      return documents.slice(0, 5).join('\n\n');
     }
+  } catch (error) {
+    console.error('Pinecone search error:', error.message);
+    return '';
   }
-
-  // Fallback to built-in knowledge
-  const queryLower = query.toLowerCase();
-  const relevantKnowledge = [];
-
-  if (queryLower.includes('hypertrophy') || queryLower.includes('muscle') || queryLower.includes('size')) {
-    relevantKnowledge.push(FITNESS_KNOWLEDGE.hypertrophy);
-  }
-  if (queryLower.includes('strength') || queryLower.includes('strong') || queryLower.includes('power')) {
-    relevantKnowledge.push(FITNESS_KNOWLEDGE.strength);
-  }
-  if (queryLower.includes('program') || queryLower.includes('periodization') || queryLower.includes('plan')) {
-    relevantKnowledge.push(FITNESS_KNOWLEDGE.periodization);
-  }
-  if (queryLower.includes('recovery') || queryLower.includes('rest') || queryLower.includes('sleep')) {
-    relevantKnowledge.push(FITNESS_KNOWLEDGE.recovery);
-  }
-
-  return relevantKnowledge.join('\n\n');
 }
 
 // --- Helper: Input validation ---
@@ -366,7 +314,7 @@ ${context.activeProgram ? `- Active program: ${context.activeProgram}` : ''}`;
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
-      max_tokens: 1000,
+      max_tokens: 2000,
       temperature: 0.7,
     });
 
@@ -402,7 +350,7 @@ app.post('/api/search', async (req, res) => {
 // --- Generate program endpoint ---
 app.post('/api/generate-program', async (req, res) => {
   try {
-    const { goal, daysPerWeek, experienceLevel, equipment } = req.body;
+    const { goal, daysPerWeek, experienceLevel, equipment, trainingStyle, injuries } = req.body;
 
     if (!goal || !daysPerWeek || !experienceLevel) {
       return res.status(400).json({ error: 'Missing required fields: goal, daysPerWeek, experienceLevel' });
@@ -415,7 +363,7 @@ app.post('/api/generate-program', async (req, res) => {
     // Fetch user profile and knowledge for personalization
     const [userProfile, relevantKnowledge] = await Promise.all([
       fetchUserProfile(),
-      searchKnowledge(`${goal} ${experienceLevel} workout program`),
+      searchKnowledge(`${goal} ${trainingStyle || ''} ${experienceLevel} workout program tempo periodization`),
     ]);
 
     let userContext = '';
@@ -436,43 +384,86 @@ app.post('/api/generate-program', async (req, res) => {
     }
 
     const prompt = `Create a ${daysPerWeek}-day workout program for someone with ${experienceLevel} experience level, focusing on ${goal}.
+Training style: ${trainingStyle || 'Functional Bodybuilding'}.
 Available equipment: ${(equipment || []).join(', ') || 'Full gym'}.
+${injuries ? `Injuries/limitations: ${injuries}` : ''}
 ${userContext}
 ${knowledgeContext}
 
-Return the program as a JSON object with the following structure:
+Return the program as a JSON object with this EXACT structure:
 {
   "name": "Program Name",
-  "description": "Brief description",
+  "description": "Brief description of the program",
+  "programOverview": {
+    "goal": "${goal}",
+    "style": "${trainingStyle || 'Functional Bodybuilding'}",
+    "level": "${experienceLevel}",
+    "cycleLength": "e.g. 4-Week Mesocycle",
+    "frequency": "${daysPerWeek} Days/Week"
+  },
   "workoutDays": [
     {
-      "name": "Day 1 - Name",
+      "name": "Day 1 - Descriptive Name",
       "dayOfWeek": 1,
       "exercises": [
         {
-          "exerciseName": "Exercise Name",
-          "setNumber": 3,
-          "targetReps": 10,
-          "targetWeight": 0
+          "exerciseName": "Precise Exercise Name",
+          "sets": 4,
+          "reps": "6-8",
+          "tempo": "31X1",
+          "intensity": "2 RIR",
+          "rest": "2-3 min",
+          "notes": "Technical cues or scaling options"
         }
       ]
     }
   ]
-}`;
+}
+
+IMPORTANT:
+- Every exercise MUST include tempo (4-digit: Eccentric-Bottom-Concentric-Top, e.g. 31X1, 4010, 20X0), intensity (RIR or %), rest period, and notes.
+- Use rep ranges as strings (e.g. "6-8", "10-12", "8-10 per leg").
+- Include warm-up cues in the first exercise notes of each day.
+- For conditioning exercises, use appropriate formats in notes (e.g. "AMRAP 12 min", "EMOM 10 min").`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a fitness program designer. Only output valid JSON.' },
+        {
+          role: 'system',
+          content: SYSTEM_PROMPT + '\n\nYou are generating a structured workout program. Output ONLY valid JSON matching the requested schema. Include tempo prescriptions (e.g. 31X1, 4010), intensity (RIR or %), rest periods, and coaching notes for every exercise.',
+        },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 2000,
+      max_tokens: 4000,
       temperature: 0.7,
       response_format: { type: 'json_object' },
     });
 
     const responseText = completion.choices[0].message.content;
     const program = JSON.parse(responseText);
+
+    // Normalize exercises to maintain backward compatibility
+    if (program.workoutDays) {
+      program.workoutDays = program.workoutDays.map(day => ({
+        ...day,
+        exercises: (day.exercises || []).map(ex => ({
+          ...ex,
+          // Ensure backward-compatible fields exist
+          setNumber: ex.setNumber || ex.sets || 3,
+          targetReps: ex.targetReps || parseInt(String(ex.reps)) || 10,
+          targetWeight: ex.targetWeight || 0,
+          // Preserve new fields
+          sets: ex.sets || ex.setNumber || 3,
+          reps: ex.reps || String(ex.targetReps || 10),
+          tempo: ex.tempo || '',
+          intensity: ex.intensity || '',
+          rest: ex.rest || '',
+          notes: ex.notes || '',
+        })),
+      }));
+    }
+
     res.json({ program });
   } catch (error) {
     console.error('Generate program error:', error);

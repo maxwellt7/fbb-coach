@@ -19,6 +19,8 @@ export default function Programs() {
     hypertrophy: 'Hypertrophy',
     powerlifting: 'Powerlifting',
     bodybuilding: 'Bodybuilding',
+    crossfit: 'CrossFit',
+    hybrid: 'Hybrid',
     general: 'General Fitness',
   };
 
@@ -27,6 +29,8 @@ export default function Programs() {
     hypertrophy: 'from-blue-500 to-cyan-500',
     powerlifting: 'from-purple-500 to-pink-500',
     bodybuilding: 'from-green-500 to-emerald-500',
+    crossfit: 'from-yellow-500 to-orange-500',
+    hybrid: 'from-teal-500 to-blue-500',
     general: 'from-gray-500 to-gray-400',
   };
 
@@ -178,21 +182,27 @@ export default function Programs() {
         <p className="text-gray-400 text-sm mb-4">
           Quick-start templates based on popular training methodologies
         </p>
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <TemplateCard
-            title="Push/Pull/Legs"
-            description="6-day split focusing on movement patterns"
+            title="FBB Push/Pull/Legs"
+            description="6-day split with tempo prescriptions"
             goal="hypertrophy"
             days={6}
           />
           <TemplateCard
-            title="Upper/Lower"
+            title="Upper/Lower Strength"
             description="4-day balanced strength program"
             goal="strength"
             days={4}
           />
           <TemplateCard
-            title="Full Body"
+            title="Hybrid FBB + CrossFit"
+            description="5-day FBB strength + CrossFit conditioning"
+            goal="crossfit"
+            days={5}
+          />
+          <TemplateCard
+            title="Full Body FBB"
             description="3-day program for busy schedules"
             goal="general"
             days={3}
@@ -217,6 +227,8 @@ function TemplateCard({
   const goalColors: Record<string, string> = {
     strength: 'from-red-500/20 to-orange-500/20 border-red-500/30',
     hypertrophy: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
+    crossfit: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/30',
+    hybrid: 'from-teal-500/20 to-blue-500/20 border-teal-500/30',
     general: 'from-gray-500/20 to-gray-400/20 border-gray-500/30',
   };
 

@@ -1,0 +1,751 @@
+{
+  "name": "AI Fitness Program Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0b3fdb5f-2b21-4bca-a395-86f6a43456b0",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Ready for Plan",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "f122196c-9988-4af1-a9ce-f6b7dcbb57b3",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-chat-latest",
+          "mode": "list",
+          "cachedResultName": "gpt-5-chat-latest"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1072,
+        112
+      ],
+      "id": "c4200e66-8d4d-4b30-b45d-90cb0f28b339",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "t7SVlMvWXonzeDfr",
+          "name": "OpenAI FoundersOS"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Primary Goal: {{ $('Set Programming Fields').item.json.property_primary_goal }}\nTraining Style: {{ $('Set Programming Fields').item.json.property_training_style }}\nExperience: {{ $('Set Programming Fields').item.json.property_experience_level }}\nFrequency: {{ $('Set Programming Fields').item.json.property_frequency_days_wk }}\nEquipment: {{ $('Set Programming Fields').item.json.property_equipment[0] }}\nInjuries: {{ $('Set Programming Fields').item.json.property_injuries_limits }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# System Prompt: AI Fitness Programming Specialist\n\n## 1. Role and Goal\n\nYou are an expert-level AI Fitness Programming Specialist. Your primary goal is to create safe, effective, and highly personalized workout programs based on user-provided goals, experience, and preferences. You are a master of programming for both functional bodybuilding and CrossFit methodologies, capable of creating standalone programs for either discipline or a hybrid program that intelligently blends the two.\n\nYour responses must be structured, evidence-based, and easy for the user to understand and implement. You must act as a coach, guiding the user towards the best program for their specific context.\n\n## 2. Core Knowledge Base\n\nYou operate from a comprehensive understanding of exercise science, drawing from two primary domains:\n\n### 2.1 Bodybuilding for Hypertrophy\n\n*   **Primary Goal:** Aesthetics and maximal muscle growth (hypertrophy).\n*   **Core Principles:** The systematic application of mechanical tension, metabolic stress, and muscle damage to stimulate adaptation.\n*   **Periodization:** You must structure training in macrocycles, mesocycles (typically 4-8 weeks), and microcycles (weekly). A typical mesocycle follows an Accumulation -> Intensification -> Deload structure.\n*   **Volume Landmarks (Per Muscle Group/Week):** You must manage volume using the following framework:\n    *   **MV (Maintenance Volume):** The volume to maintain muscle (~6 sets/week).\n    *   **MEV (Minimum Effective Volume):** The minimum volume to grow; the starting point of a mesocycle.\n    *   **MAV (Maximum Adaptive Volume):** The optimal range for growth, progressing from MEV towards MRV.\n    *   **MRV (Maximum Recoverable Volume):** The maximum volume from which a user can recover. A mesocycle concludes when MRV is reached, followed by a deload.\n*   **Intensity:** Measured by Reps in Reserve (RIR). Most work should be in the 0-4 RIR range.\n*   **Frequency:** Each muscle group should be trained 2-3 times per week for optimal results.\n*   **Exercise Selection:** Prioritize exercises with a high Stimulus-to-Fatigue Ratio (SFR), including a mix of compound and isolation movements.\n\n### 2.2 CrossFit for General Physical Preparedness (GPP)\n\n*   **Primary Goal:** Increase work capacity across broad time and modal domains (GPP).\n*   **Core Principles:** Constantly Varied, High-Intensity, Functional Movement.\n*   **Modalities:** Your programming must blend Monostructural (cardio), Gymnastics (bodyweight), and Weightlifting (external load control).\n*   **Energy System Development:** You must target all three metabolic pathways:\n    *   **Phosphagen (Anaerobic):** <15 sec, max intensity.\n    *   **Glycolytic (Anaerobic):** 15 sec - 4 min, high intensity.\n    *   **Oxidative (Aerobic):** >4 min, low-to-moderate intensity.\n*   **Structure:** Employ structured variance. A common, effective template is concurrent training, developing strength and conditioning simultaneously (e.g., 3 days of strength work alongside daily conditioning).\n*   **Benchmarking & Scaling:** Utilize benchmark workouts (\"The Girls,\" \"Heroes\") to test and track progress. All workouts must be scalable to the user's ability level to preserve the intended stimulus.\n\n## 3. Information Gathering (Mandatory First Step)\n\nBefore providing any programming, you MUST ask the user the following questions to gather the necessary context. Do not proceed without this information.\n\n1.  **Primary Goal:** \"What is your single most important fitness goal right now? (e.g., build muscle size, improve CrossFit performance, lose fat while gaining strength, general health)\"\n2.  **Training Style Preference:** \"Which training style are you most interested in? (a) Bodybuilding, (b) CrossFit, or (c) a Hybrid approach that blends both?\"\n3.  **Experience Level:** \"How would you describe your training experience? (a) Beginner (0-1 years of structured training), (b) Intermediate (1-3 years), (c) Advanced (3+ years)\"\n4.  **Training Frequency:** \"How many days per week can you realistically commit to training? And how much time do you have per session?\"\n5.  **Equipment Access:** \"What equipment do you have access to? (e.g., full commercial gym, CrossFit box, home gym with barbell and dumbbells, bodyweight only)\"\n6.  **Current Performance & Limitations:** \"Are there any current injuries, movement limitations, or specific weaknesses you want to address? If you know them, what are your current max lifts (e.g., squat, deadlift, press) or recent benchmark workout scores?\"\n\n## 4. Programming Framework\n\nOnce you have the user's information, construct the program following these steps:\n\n### Step 1: Select the Programming Model\n\n*   **If Bodybuilding:** Design a 4-8 week mesocycle. Define the weekly split (e.g., Upper/Lower, Push/Pull/Legs) based on the user's frequency. Start the first week's volume at the user's estimated MEV and create a clear progression model to increase volume weekly towards their MRV.\n*   **If CrossFit:** Design a 4-week block. Use a concurrent model (e.g., 3 strength days + 5 conditioning days). Ensure variance in time domains, modalities, and movements. Include at least one benchmark workout in the block. Clearly define the intended stimulus for each MetCon.\n*   **If Hybrid:** This is the most complex and requires careful integration. A good starting point is a functional bodybuilding model (e.g., CompTrain's structure). Prioritize compound strength movements, and then add conditioning pieces that are designed to complement, not detract from, the strength and hypertrophy work. For example, on a heavy squat day, the conditioning should not involve high-volume squatting.\n\n### Step 2: Detail the Microcycle (The Training Week)\n\nFor each day of the week, provide a complete workout plan.\n\n### Step 3: Define the Exercises and Parameters\n\nFor each exercise, you must specify:\n*   **Exercise Name:** Be precise (e.g., \"Barbell Back Squat,\" not just \"Squat\").\n*   **Sets & Reps:** (e.g., 3 sets of 8-10 reps).\n*   **Intensity/RIR:** (e.g., \"@ 2 RIR\" or \"Leave 2 reps in the tank\"). For CrossFit, specify percentage of 1RM if appropriate (e.g., \"5 sets of 3 @ 85%\").\n*   **Rest:** (e.g., \"90-120 seconds rest between sets\").\n*   **Tempo:** (Optional but recommended for bodybuilding) e.g., \"(3-1-1-0)\" representing eccentric, pause, concentric, pause.\n*   **Notes:** Provide key technique cues, the intended stimulus, or scaling options.\n\n## 5. Output Format\n\nPresent the final program in a clear, well-structured Markdown format. Use tables for weekly overviews and then provide a day-by-day breakdown.\n\n**Example Structure:**\n\n**Program Overview**\n*   **Goal:** [User's Goal]\n*   **Style:** [Bodybuilding/CrossFit/Hybrid]\n*   **Level:** [Beginner/Intermediate/Advanced]\n*   **Cycle Length:** [e.g., 4-Week Mesocycle]\n*   **Frequency:** [e.g., 4 Days/Week]\n\n**Weekly Split**\n| Day | Focus |\n| :-- | :--- |\n| 1 | Upper Body Strength + Hypertrophy |\n| 2 | Lower Body Strength + Hypertrophy |\n| 3 | Rest |\n| 4 | Full Body Power + MetCon |\n| 5 | Hypertrophy Accessories + Aerobic |\n| 6 | Rest |\n| 7 | Active Recovery |\n\n**Daily Workouts: Week 1**\n\n**Day 1: Upper Body**\n\n| Exercise | Sets | Reps | Intensity | Rest | Notes |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| A. Barbell Bench Press | 4 | 5-7 | 2 RIR | 2-3 min | Focus on a controlled eccentric. |\n| B1. Incline DB Press | 3 | 8-12 | 1 RIR | 60s | Superset with B2. |\n| B2. Bent-Over Barbell Row | 3 | 8-12 | 1 RIR | 90s | Maintain a neutral spine. |\n| ... | ... | ... | ... | ... | ... |\n\n## 6. Constraints and Guardrails\n\n*   **Safety First:** Always include a disclaimer: \"I am an AI assistant and not a medical professional. Please consult with a qualified healthcare provider before starting any new fitness program. Perform all exercises with proper form to avoid injury.\"\n*   **No Nutritional Advice:** Do not provide specific meal plans or macronutrient breakdowns. You may give general, evidence-based nutritional principles (e.g., \"Ensure adequate protein intake to support muscle growth\").\n*   **Clarity and Simplicity:** Avoid overly technical jargon where possible. Explain concepts clearly.\n*   **Scope:** Stick to creating the program. Do not engage in conversations outside the scope of fitness programming.\n\n--- RELEVANT KNOWLEDGE BASE CONTEXT ---\nYou MUST use the following retrieved knowledge base articles to inform your response. This context is highly relevant to the user's request. The query you're using to search the pinecone index is \n {{ $json.pineconeQuery }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1216,
+        -96
+      ],
+      "id": "72acd059-bda5-4e88-961a-360211c32e9b",
+      "name": "Programming Specialist"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "19e44f8f-6668-4f68-8c59-cc1be780369f",
+              "name": "pineconeQuery",
+              "value": "=Based on the following user profile, what are the most important principles for creating their workout program? Goal: {{ $json.property_primary_goal }} Style: {{ $json.property_training_style }} Experience: {{ $json.property_experience_level }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "9ab82f27-25b6-4115-a7f0-7942419a0b5e",
+      "name": "Create Pinecone Query"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "=This tool pulls in information about how to create fitness programming and is to be used every time that a fitness program is being created. Answer this query:  {{ $json.pineconeQuery }}",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "fitness-programming",
+          "mode": "list",
+          "cachedResultName": "fitness-programming"
+        },
+        "topK": 10,
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1200,
+        112
+      ],
+      "id": "3a0841ce-a06b-4eee-a11f-9259e2d35376",
+      "name": "Fitness Knowledge Base",
+      "credentials": {
+        "pineconeApi": {
+          "id": "vs2ifFQhyFsqs34O",
+          "name": "Pinecone Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"programOverview\": {\n    \"goal\": \"Build Muscle\",\n    \"style\": \"Bodybuilding\",\n    \"level\": \"Intermediate\",\n    \"cycleLength\": \"4-Week Mesocycle\",\n    \"frequency\": \"4 Days/Week\"\n  },\n  \"workouts\": [\n    {\n      \"weekNumber\": 1,\n      \"dayNumber\": 1,\n      \"workoutName\": \"Upper Body - Push Focus\",\n      \"scheduledDate\": \"2024-01-15\",\n      \"exercises\": [\n        {\n          \"exerciseName\": \"Barbell Bench Press\",\n          \"sets\": 4,\n          \"reps\": \"6-8\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"2-3 min\",\n          \"notes\": \"Focus on controlled eccentric (3 seconds down). Keep shoulder blades retracted.\"\n        },\n        {\n          \"exerciseName\": \"Incline Dumbbell Press\",\n          \"sets\": 3,\n          \"reps\": \"8-12\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"90 sec\",\n          \"notes\": \"30-45 degree incline. Full range of motion.\"\n        },\n        {\n          \"exerciseName\": \"Cable Lateral Raises\",\n          \"sets\": 3,\n          \"reps\": \"12-15\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Control the eccentric. Slight forward lean.\"\n        },\n        {\n          \"exerciseName\": \"Overhead Tricep Extension\",\n          \"sets\": 3,\n          \"reps\": \"10-12\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Keep elbows tucked. Full stretch at bottom.\"\n        }\n      ]\n    },\n    {\n      \"weekNumber\": 1,\n      \"dayNumber\": 2,\n      \"workoutName\": \"Lower Body - Squat Focus\",\n      \"scheduledDate\": \"2024-01-17\",\n      \"exercises\": [\n        {\n          \"exerciseName\": \"Barbell Back Squat\",\n          \"sets\": 4,\n          \"reps\": \"5-7\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"3 min\",\n          \"notes\": \"Depth to parallel or below. Maintain neutral spine.\"\n        },\n        {\n          \"exerciseName\": \"Romanian Deadlift\",\n          \"sets\": 3,\n          \"reps\": \"8-10\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"2 min\",\n          \"notes\": \"Hinge at hips. Feel stretch in hamstrings.\"\n        },\n        {\n          \"exerciseName\": \"Leg Press\",\n          \"sets\": 3,\n          \"reps\": \"10-12\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"90 sec\",\n          \"notes\": \"Feet shoulder-width. Full range of motion.\"\n        },\n        {\n          \"exerciseName\": \"Leg Curl\",\n          \"sets\": 3,\n          \"reps\": \"12-15\",\n          \"intensity\": \"0 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Control the eccentric. Squeeze at top.\"\n        }\n      ]\n    },\n    {\n      \"weekNumber\": 1,\n      \"dayNumber\": 3,\n      \"workoutName\": \"Upper Body - Pull Focus\",\n      \"scheduledDate\": \"2024-01-19\",\n      \"exercises\": [\n        {\n          \"exerciseName\": \"Pull-Ups\",\n          \"sets\": 4,\n          \"reps\": \"6-10\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"2-3 min\",\n          \"notes\": \"Full hang to chin over bar. Add weight if needed.\"\n        },\n        {\n          \"exerciseName\": \"Barbell Bent-Over Row\",\n          \"sets\": 4,\n          \"reps\": \"8-10\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"2 min\",\n          \"notes\": \"Torso at 45 degrees. Pull to lower chest.\"\n        },\n        {\n          \"exerciseName\": \"Face Pulls\",\n          \"sets\": 3,\n          \"reps\": \"15-20\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"External rotation at end. High rep for rear delts.\"\n        },\n        {\n          \"exerciseName\": \"Barbell Curl\",\n          \"sets\": 3,\n          \"reps\": \"8-12\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Strict form. No swinging.\"\n        }\n      ]\n    },\n    {\n      \"weekNumber\": 1,\n      \"dayNumber\": 4,\n      \"workoutName\": \"Lower Body - Deadlift Focus\",\n      \"scheduledDate\": \"2024-01-21\",\n      \"exercises\": [\n        {\n          \"exerciseName\": \"Conventional Deadlift\",\n          \"sets\": 4,\n          \"reps\": \"5-7\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"3 min\",\n          \"notes\": \"Neutral spine throughout. Drive through heels.\"\n        },\n        {\n          \"exerciseName\": \"Bulgarian Split Squat\",\n          \"sets\": 3,\n          \"reps\": \"8-10 per leg\",\n          \"intensity\": \"2 RIR\",\n          \"rest\": \"90 sec\",\n          \"notes\": \"Front shin vertical. Control descent.\"\n        },\n        {\n          \"exerciseName\": \"Leg Extension\",\n          \"sets\": 3,\n          \"reps\": \"12-15\",\n          \"intensity\": \"1 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Pause at top. Control eccentric.\"\n        },\n        {\n          \"exerciseName\": \"Standing Calf Raise\",\n          \"sets\": 4,\n          \"reps\": \"15-20\",\n          \"intensity\": \"0 RIR\",\n          \"rest\": \"60 sec\",\n          \"notes\": \"Full stretch at bottom. Hold contraction at top.\"\n        }\n      ]\n    }\n  ]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1488,
+        112
+      ],
+      "id": "501a9ca7-150f-40ac-9253-1290b2964977",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-opus-4-5-20251101",
+          "mode": "list",
+          "cachedResultName": "Claude Opus 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        1408,
+        288
+      ],
+      "id": "eadf6230-381b-436e-a7c6-b8ace453c8d0",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "LqXrHdtMn5haTEj4",
+          "name": "Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "topN": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        288
+      ],
+      "id": "f3d2106e-c08b-4794-a9ef-4f86f6460b33",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "qwnUJBPM2qU9p8j0",
+          "name": "FounderOS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e6534dd-dc56-8078-9a18-d7c4fc53d935",
+          "mode": "list",
+          "cachedResultName": "Workouts",
+          "cachedResultUrl": "https://www.notion.so/2e6534dddc5680789a18d7c4fc53d935"
+        },
+        "title": "={{ $('Loop Over Items').item.json.scheduledDate }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Workout Name|title",
+              "title": "={{ $('Loop Over Items').item.json.workoutName }}"
+            },
+            {
+              "key": "Week Number|number",
+              "numberValue": "={{ $('Loop Over Items').item.json.weekNumber }}"
+            },
+            {
+              "key": "Day Number|number",
+              "numberValue": "={{ $('Loop Over Items').item.json.dayNumber }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "Planned"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "textContent": "={{ $json.formattedExercises }}"
+            }
+          ]
+        },
+        "options": {
+          "icon": "📆"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2464,
+        -80
+      ],
+      "id": "e4763291-67ec-4525-9a3a-009c6de22a3e",
+      "name": "Create Workout Pages",
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1840,
+        -96
+      ],
+      "id": "ecf4d957-5726-4ded-816b-2067b28c5e36",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// For n8n Code node - processes the JSON data and formats exercises\n\n// Input: Array of workout days with exercises\nconst workoutData = $input.all();\n\nfunction formatExercises(workouts) {\n  let formattedString = '';\n  \n  // Iterate through each workout day\n  for (const workout of workouts) {\n    const exercises = workout.json.exercises || [];\n    \n    // Format each exercise\n    for (const exercise of exercises) {\n      formattedString += `### ${exercise.exerciseName}\\n`;\n      formattedString += `${exercise.sets} x ${exercise.reps}\\n`;\n      formattedString += `**Intensity:** ${exercise.intensity}\\n`;\n      formattedString += `**Rest:** ${exercise.rest}\\n`;\n      formattedString += `**Notes:** ${exercise.notes}\\n`;\n      formattedString += `---\\n\\n`;\n    }\n  }\n  \n  return formattedString.trim();\n}\n\n// Process the data\nconst result = formatExercises(workoutData);\n\nreturn [{ json: { formattedExercises: result } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        -80
+      ],
+      "id": "ee89a0ae-5e50-43eb-bc96-5bc05b3a61fb",
+      "name": "Prepare Workout For Notion"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output.workouts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        -96
+      ],
+      "id": "d99af7b9-87d2-4a17-acd7-4fcaf54025ec",
+      "name": "Split Workouts"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "69022d55-67ae-4e60-bc7e-a14a50157fab",
+              "name": "property_primary_goal",
+              "value": "={{ $json.property_primary_goal }}",
+              "type": "string"
+            },
+            {
+              "id": "ff718d77-5eaa-435c-b29d-6cf874f5aed0",
+              "name": "property_training_style",
+              "value": "={{ $json.property_training_style }}",
+              "type": "string"
+            },
+            {
+              "id": "3bea7ea5-edfc-4bf8-ba37-a32b2fae3195",
+              "name": "property_experience_level",
+              "value": "={{ $json.property_experience_level }}",
+              "type": "string"
+            },
+            {
+              "id": "dc106713-08ae-4d97-8ea5-4bdbe112c002",
+              "name": "property_frequency_days_wk",
+              "value": "={{ $json.property_frequency_days_wk }}",
+              "type": "number"
+            },
+            {
+              "id": "3b597f0a-a2db-44c9-9448-129842b9b5eb",
+              "name": "property_equipment[0]",
+              "value": "={{ $json.property_equipment[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "7cf27970-1222-4316-8cb6-70cfbf62f526",
+              "name": "property_injuries_limits",
+              "value": "={{ $json.property_injuries_limits }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        -96
+      ],
+      "id": "6c3d48bb-1101-41a2-a9fc-2febaea168b6",
+      "name": "Set Programming Fields"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "get",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        -96
+      ],
+      "id": "5d632329-834c-480a-ad5e-2c6940879f66",
+      "name": "Get User Page",
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e6534dd-dc56-80ee-9760-cca3191c56c3",
+          "mode": "list",
+          "cachedResultName": "Clients",
+          "cachedResultUrl": "https://www.notion.so/2e6534dddc5680ee9760cca3191c56c3"
+        },
+        "simple": false
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2144,
+        -256
+      ],
+      "id": "b05971ef-d6b8-4d36-9c30-d6355d164077",
+      "name": "User -> Plan Delivered",
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "event": "pagedUpdatedInDatabase",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e6534dd-dc56-80ee-9760-cca3191c56c3",
+          "mode": "list",
+          "cachedResultName": "Clients",
+          "cachedResultUrl": "https://www.notion.so/2e6534dddc5680ee9760cca3191c56c3"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "20992a94-38c7-40b9-b6cf-799e31a5f15f",
+      "name": "User Updated In Database",
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 020 * * SUN"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        240
+      ],
+      "id": "7ba55dca-d806-4117-a8c7-fe4d2ec76a4a",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-opus-4-6",
+          "mode": "list",
+          "cachedResultName": "Claude Opus 4.6"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        960,
+        112
+      ],
+      "id": "db2bc449-9954-435c-8a39-ec8ea6f9ac50",
+      "name": "Anthropic Chat Model1",
+      "credentials": {
+        "anthropicApi": {
+          "id": "LqXrHdtMn5haTEj4",
+          "name": "Fitness API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "embed-english-v3.0"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsCohere",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        288
+      ],
+      "id": "d5cdb209-9f0c-4db1-a15d-d16910f13998",
+      "name": "Embeddings Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "qwnUJBPM2qU9p8j0",
+          "name": "FounderOS API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2352,
+        -256
+      ],
+      "id": "0d4890a7-fe1e-4bf6-98c8-532a4770cb7f",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "9OFAblU9hK6Tm4bC",
+          "name": "Notion Fitness API"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get User Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Programming Specialist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Programming Specialist": {
+      "main": [
+        [
+          {
+            "node": "Split Workouts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Pinecone Query": {
+      "main": [
+        [
+          {
+            "node": "Programming Specialist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fitness Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Programming Specialist",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Programming Specialist",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Fitness Knowledge Base",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Workout Pages": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "User -> Plan Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Workout For Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Workout For Notion": {
+      "main": [
+        [
+          {
+            "node": "Create Workout Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Workouts": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Programming Fields": {
+      "main": [
+        [
+          {
+            "node": "Create Pinecone Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Page": {
+      "main": [
+        [
+          {
+            "node": "Set Programming Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Updated In Database": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Programming Specialist",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Embeddings Cohere": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Fitness Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User -> Plan Delivered": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "001c3e4e-0055-4ddc-80eb-f7f675920a28",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b4dab6bc82354797802e6d1ee2c1fe486aa8455b89929a584692526a2b575109"
+  },
+  "id": "APz3LivSIbjEmvQU",
+  "tags": []
+}

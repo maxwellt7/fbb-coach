@@ -131,9 +131,17 @@ export default function Dashboard() {
                     key={idx}
                     className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0"
                   >
-                    <span className="text-gray-300">{exercise.exerciseName}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-300">{exercise.exerciseName}</span>
+                      {exercise.tempo && (
+                        <span className="text-xs px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                          {exercise.tempo}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-sm text-gray-500">
-                      {exercise.targetReps} × {exercise.targetWeight}lbs
+                      {exercise.reps || exercise.targetReps} × {exercise.targetWeight || 'BW'}
+                      {exercise.targetWeight ? 'lbs' : ''}
                     </span>
                   </div>
                 ))}

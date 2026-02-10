@@ -19,6 +19,11 @@ export interface WorkoutSet {
   rpe?: number;
   completed: boolean;
   notes?: string;
+  tempo?: string;      // "31X1", "4010"
+  intensity?: string;  // "2 RIR", "85%"
+  rest?: string;       // "2-3 min", "90 sec"
+  reps?: string;       // "6-8" (rich string format from AI)
+  sets?: number;       // Alias for setNumber from new schema
 }
 
 export interface WorkoutDay {
@@ -27,6 +32,8 @@ export interface WorkoutDay {
   dayOfWeek: number;
   exercises: WorkoutSet[];
   notes?: string;
+  weekNumber?: number;
+  dayNumber?: number;
 }
 
 export interface Program {
@@ -35,7 +42,7 @@ export interface Program {
   description: string;
   duration: number; // weeks
   daysPerWeek: number;
-  goal: 'strength' | 'hypertrophy' | 'powerlifting' | 'bodybuilding' | 'general';
+  goal: 'strength' | 'hypertrophy' | 'powerlifting' | 'bodybuilding' | 'general' | 'crossfit' | 'hybrid';
   workoutDays: WorkoutDay[];
   createdAt: string;
   updatedAt: string;
@@ -85,10 +92,13 @@ export interface MuscleGroup {
 export const MUSCLE_GROUPS: MuscleGroup[] = [
   { name: 'Chest', exercises: ['Bench Press', 'Incline Dumbbell Press', 'Cable Flyes', 'Dips', 'Push-ups'] },
   { name: 'Back', exercises: ['Deadlift', 'Barbell Rows', 'Pull-ups', 'Lat Pulldown', 'Cable Rows'] },
-  { name: 'Shoulders', exercises: ['Overhead Press', 'Lateral Raises', 'Face Pulls', 'Rear Delt Flyes', 'Arnold Press'] },
-  { name: 'Legs', exercises: ['Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Leg Extensions', 'Lunges'] },
+  { name: 'Shoulders', exercises: ['Overhead Press', 'Lateral Raises', 'Face Pulls', 'Rear Delt Flyes', 'Arnold Press', 'Filly Press'] },
+  { name: 'Legs', exercises: ['Squat', 'Front Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Leg Extensions', 'Lunges', 'Bulgarian Split Squats'] },
   { name: 'Arms', exercises: ['Barbell Curls', 'Tricep Pushdowns', 'Hammer Curls', 'Skull Crushers', 'Preacher Curls'] },
   { name: 'Core', exercises: ['Planks', 'Cable Crunches', 'Hanging Leg Raises', 'Ab Wheel', 'Russian Twists'] },
+  { name: 'Olympic', exercises: ['Clean & Jerk', 'Snatch', 'Power Clean', 'Power Snatch', 'Hang Clean', 'Clean Pull'] },
+  { name: 'Gymnastics', exercises: ['Muscle-ups', 'Ring Dips', 'Handstand Push-ups', 'Toes-to-Bar', 'Rope Climbs', 'Pistol Squats'] },
+  { name: 'Conditioning', exercises: ['Wall Balls', 'Box Jumps', 'Burpees', 'Thrusters', 'Rowing', 'Ski Erg', 'Assault Bike'] },
 ];
 
 /** Calculate total volume (weight × reps) for an array of workout sets */
@@ -109,3 +119,20 @@ export const EQUIPMENT_TYPES = [
   'Kettlebell',
   'Machine',
 ];
+
+export interface ProgramOverview {
+  goal: string;
+  style: string;
+  level: string;
+  cycleLength: string;
+  frequency: string;
+}
+
+export const TRAINING_STYLES = [
+  'Functional Bodybuilding',
+  'CrossFit',
+  'Hybrid',
+  'Traditional Bodybuilding',
+  'Powerlifting',
+  'Strength & Conditioning',
+] as const;
