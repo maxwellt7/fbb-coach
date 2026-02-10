@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
+import { CohereClient } from 'cohere-ai';
 
 dotenv.config();
 
@@ -23,6 +24,15 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Initialize Cohere for embeddings
+let cohere = null;
+if (process.env.COHERE_API_KEY) {
+  cohere = new CohereClient({
+    token: process.env.COHERE_API_KEY,
+  });
+  console.log('Cohere initialized successfully');
+}
+
 // Initialize Pinecone (if configured)
 let pineconeIndex = null;
 if (process.env.PINECONE_API_KEY) {
@@ -30,7 +40,7 @@ if (process.env.PINECONE_API_KEY) {
     const pinecone = new Pinecone({
       apiKey: process.env.PINECONE_API_KEY,
     });
-    pineconeIndex = pinecone.index(process.env.PINECONE_INDEX || 'fitness-knowledge');
+    pineconeIndex = pinecone.index(process.env.PINECONE_INDEX || 'fitness-programming');
     console.log('Pinecone initialized successfully');
   } catch (error) {
     console.log('Pinecone not configured or error:', error.message);
@@ -103,26 +113,27 @@ const FITNESS_KNOWLEDGE = {
 
 // Search knowledge base (Pinecone or fallback)
 async function searchKnowledge(query) {
-  if (pineconeIndex) {
+  if (pineconeIndex && cohere) {
     try {
-      // Generate embedding for query
-      const embeddingResponse = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: query,
+      // Generate embedding for query using Cohere
+      const embeddingResponse = await cohere.embed({
+        texts: [query],
+        model: 'embed-english-v3.0',
+        inputType: 'search_query',
       });
       
-      const queryEmbedding = embeddingResponse.data[0].embedding;
+      const queryEmbedding = embeddingResponse.embeddings[0];
       
       // Search Pinecone
       const searchResults = await pineconeIndex.query({
         vector: queryEmbedding,
-        topK: 3,
+        topK: 5,
         includeMetadata: true,
       });
       
       if (searchResults.matches && searchResults.matches.length > 0) {
         return searchResults.matches
-          .map(match => match.metadata?.text || '')
+          .map(match => match.metadata?.text || match.metadata?.content || '')
           .filter(text => text.length > 0)
           .join('\n\n');
       }
@@ -302,5 +313,6 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, () => {
   console.log(`🏋️ FBB Coach server running on http://localhost:${PORT}`);
   console.log(`   OpenAI: ${process.env.OPENAI_API_KEY ? '✓ Configured' : '✗ Not configured'}`);
+  console.log(`   Cohere: ${cohere ? '✓ Configured' : '✗ Not configured'}`);
   console.log(`   Pinecone: ${pineconeIndex ? '✓ Connected' : '✗ Not connected (using fallback)'}`);
 });
