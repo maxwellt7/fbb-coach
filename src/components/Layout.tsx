@@ -7,8 +7,12 @@ import {
   History,
   Menu,
   X,
+  Cloud,
+  CloudOff,
+  RefreshCw,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useStore } from '../store/useStore';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,6 +21,40 @@ const navItems = [
   { path: '/coach', icon: MessageCircle, label: 'AI Coach' },
   { path: '/history', icon: History, label: 'History' },
 ];
+
+function SyncStatus() {
+  const { syncEnabled, isSyncing, lastSynced, syncFromServer } = useStore();
+
+  if (!syncEnabled) {
+    return (
+      <div className="flex items-center gap-2 text-gray-500 text-xs">
+        <CloudOff className="w-4 h-4" />
+        <span>Local only</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => syncFromServer()}
+      disabled={isSyncing}
+      className="flex items-center gap-2 text-xs text-gray-400 hover:text-primary-400 transition-colors disabled:opacity-50"
+    >
+      {isSyncing ? (
+        <RefreshCw className="w-4 h-4 animate-spin" />
+      ) : (
+        <Cloud className="w-4 h-4 text-green-500" />
+      )}
+      <span>
+        {isSyncing
+          ? 'Syncing...'
+          : lastSynced
+          ? `Synced ${new Date(lastSynced).toLocaleTimeString()}`
+          : 'Cloud sync enabled'}
+      </span>
+    </button>
+  );
+}
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -110,6 +148,11 @@ export default function Layout() {
           <p className="text-xs text-gray-500">
             Ask the AI Coach for personalized workout advice and program recommendations.
           </p>
+        </div>
+
+        {/* Sync status */}
+        <div className="p-4 border-t border-gray-800">
+          <SyncStatus />
         </div>
       </aside>
 

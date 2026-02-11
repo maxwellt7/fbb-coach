@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import type { Program, WorkoutLog, WorkoutSet, ChatMessage, UserStats, PersonalRecord } from '../types';
 import { calcVolume } from '../types';
+import * as syncApi from '../services/api';
 
 interface AppState {
   // Programs
@@ -35,6 +36,15 @@ interface AppState {
   // Data Export/Import
   exportData: () => string;
   importData: (jsonString: string) => boolean;
+
+  // Sync
+  syncEnabled: boolean;
+  isSyncing: boolean;
+  lastSynced: string | null;
+  syncError: string | null;
+  initSync: () => Promise<void>;
+  syncToServer: () => Promise<void>;
+  syncFromServer: () => Promise<void>;
 }
 
 export const useStore = create<AppState>()(
@@ -44,7 +54,13 @@ export const useStore = create<AppState>()(
       programs: [],
       activeProgram: null,
 
-      setActiveProgram: (program) => set({ activeProgram: program }),
+      setActiveProgram: (program) => {
+        set({ activeProgram: program });
+        // Sync active program to server
+        if (get().syncEnabled) {
+          syncApi.setActiveProgram(program?.id || null).catch(console.error);
+        }
+      },
 
       addProgram: (programData) => {
         const newProgram: Program = {
@@ -54,6 +70,10 @@ export const useStore = create<AppState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ programs: [...state.programs, newProgram] }));
+        // Sync to server
+        if (get().syncEnabled) {
+          syncApi.saveProgram(newProgram).catch(console.error);
+        }
         return newProgram;
       },
 
@@ -63,6 +83,13 @@ export const useStore = create<AppState>()(
             p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
           ),
         }));
+        // Sync updated program to server
+        if (get().syncEnabled) {
+          const program = get().programs.find((p) => p.id === id);
+          if (program) {
+            syncApi.saveProgram(program).catch(console.error);
+          }
+        }
       },
 
       deleteProgram: (id) => {
@@ -70,6 +97,10 @@ export const useStore = create<AppState>()(
           programs: state.programs.filter((p) => p.id !== id),
           activeProgram: state.activeProgram?.id === id ? null : state.activeProgram,
         }));
+        // Sync deletion to server
+        if (get().syncEnabled) {
+          syncApi.deleteProgram(id).catch(console.error);
+        }
       },
 
       // Workout Logs
@@ -128,7 +159,7 @@ export const useStore = create<AppState>()(
       },
 
       finishWorkout: (notes, rating) => {
-        const { currentWorkout } = get();
+        const { currentWorkout, syncEnabled } = get();
         if (!currentWorkout) return;
 
         const completedWorkout: WorkoutLog = {
@@ -145,6 +176,11 @@ export const useStore = create<AppState>()(
           workoutLogs: [...state.workoutLogs, completedWorkout],
           currentWorkout: null,
         }));
+
+        // Sync completed workout to server
+        if (syncEnabled) {
+          syncApi.saveWorkout(completedWorkout).catch(console.error);
+        }
       },
 
       cancelWorkout: () => {
@@ -287,9 +323,177 @@ export const useStore = create<AppState>()(
           return false;
         }
       },
+
+      // Sync state and functions
+      syncEnabled: false,
+      isSyncing: false,
+      lastSynced: null,
+      syncError: null,
+
+      initSync: async () => {
+        try {
+          const available = await syncApi.isSyncAvailable();
+          if (!available) {
+            set({ syncEnabled: false, syncError: null });
+            return;
+          }
+
+          set({ syncEnabled: true, isSyncing: true, syncError: null });
+
+          // Fetch data from server
+          const serverData = await syncApi.fetchSyncData();
+
+          if (serverData) {
+            const localState = get();
+            const hasLocalData =
+              localState.programs.length > 0 || localState.workoutLogs.length > 0;
+            const hasServerData =
+              serverData.programs.length > 0 || serverData.workouts.length > 0;
+
+            if (hasServerData && !hasLocalData) {
+              // Server has data but local is empty - use server data
+              set({
+                programs: serverData.programs,
+                activeProgram: serverData.activeProgram,
+                workoutLogs: serverData.workouts,
+                chatMessages: serverData.chatMessages || [],
+                lastSynced: new Date().toISOString(),
+                isSyncing: false,
+              });
+            } else if (hasLocalData && !hasServerData) {
+              // Local has data but server is empty - push to server
+              await syncApi.pushSyncData({
+                programs: localState.programs,
+                workouts: localState.workoutLogs,
+                activeProgram: localState.activeProgram,
+              });
+              set({
+                lastSynced: new Date().toISOString(),
+                isSyncing: false,
+              });
+            } else if (hasLocalData && hasServerData) {
+              // Both have data - merge (prefer most recent)
+              const mergedPrograms = mergeData(
+                localState.programs,
+                serverData.programs,
+                'updatedAt'
+              );
+              const mergedWorkouts = mergeData(
+                localState.workoutLogs,
+                serverData.workouts,
+                'date'
+              );
+
+              set({
+                programs: mergedPrograms,
+                workoutLogs: mergedWorkouts,
+                activeProgram: serverData.activeProgram || localState.activeProgram,
+                lastSynced: new Date().toISOString(),
+                isSyncing: false,
+              });
+
+              // Push merged data to server
+              await syncApi.pushSyncData({
+                programs: mergedPrograms,
+                workouts: mergedWorkouts,
+                activeProgram: serverData.activeProgram || localState.activeProgram,
+              });
+            } else {
+              // Neither have data
+              set({ lastSynced: new Date().toISOString(), isSyncing: false });
+            }
+          } else {
+            set({ isSyncing: false });
+          }
+        } catch (error) {
+          console.error('Sync init error:', error);
+          set({
+            syncEnabled: false,
+            isSyncing: false,
+            syncError: 'Failed to initialize sync',
+          });
+        }
+      },
+
+      syncToServer: async () => {
+        const { syncEnabled, isSyncing, programs, workoutLogs, activeProgram } = get();
+        if (!syncEnabled || isSyncing) return;
+
+        set({ isSyncing: true, syncError: null });
+        try {
+          await syncApi.pushSyncData({ programs, workouts: workoutLogs, activeProgram });
+          set({ lastSynced: new Date().toISOString(), isSyncing: false });
+        } catch (error) {
+          console.error('Sync to server error:', error);
+          set({ syncError: 'Failed to sync to server', isSyncing: false });
+        }
+      },
+
+      syncFromServer: async () => {
+        const { syncEnabled, isSyncing } = get();
+        if (!syncEnabled || isSyncing) return;
+
+        set({ isSyncing: true, syncError: null });
+        try {
+          const serverData = await syncApi.fetchSyncData();
+          if (serverData) {
+            set({
+              programs: serverData.programs,
+              activeProgram: serverData.activeProgram,
+              workoutLogs: serverData.workouts,
+              chatMessages: serverData.chatMessages || [],
+              lastSynced: new Date().toISOString(),
+              isSyncing: false,
+            });
+          } else {
+            set({ isSyncing: false });
+          }
+        } catch (error) {
+          console.error('Sync from server error:', error);
+          set({ syncError: 'Failed to sync from server', isSyncing: false });
+        }
+      },
     }),
     {
       name: 'fbb-coach-storage',
+      partialize: (state) => ({
+        programs: state.programs,
+        activeProgram: state.activeProgram,
+        workoutLogs: state.workoutLogs,
+        chatMessages: state.chatMessages,
+        currentWorkout: state.currentWorkout,
+        // Don't persist sync state
+      }),
     }
   )
 );
+
+// Helper function to merge data by ID, preferring most recent
+function mergeData<T extends { id: string }>(
+  local: T[],
+  remote: T[],
+  dateField: keyof T
+): T[] {
+  const merged = new Map<string, T>();
+
+  // Add all remote items first
+  for (const item of remote) {
+    merged.set(item.id, item);
+  }
+
+  // Override with local items if they're more recent
+  for (const item of local) {
+    const existing = merged.get(item.id);
+    if (!existing) {
+      merged.set(item.id, item);
+    } else {
+      const localDate = new Date(item[dateField] as string).getTime();
+      const remoteDate = new Date(existing[dateField] as string).getTime();
+      if (localDate > remoteDate) {
+        merged.set(item.id, item);
+      }
+    }
+  }
+
+  return Array.from(merged.values());
+}

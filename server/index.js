@@ -10,6 +10,8 @@ import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { CohereClient } from 'cohere-ai';
 import { Client as NotionClient } from '@notionhq/client';
+import { initializeDatabase } from './db/index.js';
+import syncRoutes from './routes/sync.js';
 
 dotenv.config();
 
@@ -30,7 +32,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 app.use(cors({
   origin: allowedOrigins,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'DELETE'],
   credentials: true,
 }));
 
@@ -145,8 +147,8 @@ async function fetchUserProfile() {
   }
 
   try {
-    const response = await notion.dataSources.query({
-      data_source_id: NOTION_CLIENT_DB_ID,
+    const response = await notion.databases.query({
+      database_id: NOTION_CLIENT_DB_ID,
       page_size: 1,
     });
 
@@ -180,8 +182,8 @@ async function fetchNotionWorkouts(limit = 20) {
   if (!notion || !NOTION_WORKOUT_TRACKER_DB_ID) return [];
 
   try {
-    const response = await notion.dataSources.query({
-      data_source_id: NOTION_WORKOUT_TRACKER_DB_ID,
+    const response = await notion.databases.query({
+      database_id: NOTION_WORKOUT_TRACKER_DB_ID,
       page_size: limit,
       sorts: [{ timestamp: 'created_time', direction: 'descending' }],
     });
@@ -511,7 +513,11 @@ app.get('/api/notion-workouts', async (req, res) => {
   }
 });
 
+// --- Sync routes (PostgreSQL) ---
+app.use('/api/sync', syncRoutes);
+
 // --- Health check ---
+let dbConnected = false;
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -520,6 +526,7 @@ app.get('/api/health', (req, res) => {
       pinecone: !!pineconeIndex,
       cohere: !!cohere,
       notion: !!notion,
+      database: dbConnected,
     },
   });
 });
@@ -538,10 +545,30 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'An internal server error occurred' });
 });
 
-app.listen(PORT, () => {
-  console.log(`FBB Coach server running on http://localhost:${PORT}`);
-  console.log(`   OpenAI: ${openai ? 'Configured' : 'Not configured'}`);
-  console.log(`   Cohere: ${cohere ? 'Configured' : 'Not configured'}`);
-  console.log(`   Pinecone: ${pineconeIndex ? 'Connected' : 'Not connected (using fallback)'}`);
-  console.log(`   Notion: ${notion ? 'Connected' : 'Not connected'}`);
-});
+// --- Start server ---
+async function startServer() {
+  // Initialize database if DATABASE_URL is configured
+  if (process.env.DATABASE_URL) {
+    try {
+      await initializeDatabase();
+      dbConnected = true;
+      console.log('Database: Connected and initialized');
+    } catch (error) {
+      console.error('Database initialization failed:', error.message);
+      console.log('Database: Not connected (sync features disabled)');
+    }
+  } else {
+    console.log('Database: Not configured (set DATABASE_URL for sync features)');
+  }
+
+  app.listen(PORT, () => {
+    console.log(`FBB Coach server running on http://localhost:${PORT}`);
+    console.log(`   OpenAI: ${openai ? 'Configured' : 'Not configured'}`);
+    console.log(`   Cohere: ${cohere ? 'Configured' : 'Not configured'}`);
+    console.log(`   Pinecone: ${pineconeIndex ? 'Connected' : 'Not connected (using fallback)'}`);
+    console.log(`   Notion: ${notion ? 'Connected' : 'Not connected'}`);
+    console.log(`   Database: ${dbConnected ? 'Connected' : 'Not connected'}`);
+  });
+}
+
+startServer();

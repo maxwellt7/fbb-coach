@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fbb-coach-v1';
+const CACHE_NAME = 'fbb-coach-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -28,16 +28,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || request.url.includes('/api/')) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetched = fetch(request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-
-      return cached || fetched;
-    })
+    fetch(request).then((response) => {
+      if (response.ok) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+      }
+      return response;
+    }).catch(() => caches.match(request))
   );
 });

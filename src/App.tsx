@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
+import { useStore } from './store/useStore';
 
 // Lazy-load heavier pages (recharts, react-markdown, large forms)
 const Programs = lazy(() => import('./pages/Programs'));
@@ -19,6 +20,13 @@ function PageLoader() {
 }
 
 function App() {
+  const initSync = useStore((state) => state.initSync);
+
+  // Initialize sync on app load
+  useEffect(() => {
+    initSync();
+  }, [initSync]);
+
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
