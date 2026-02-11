@@ -1,14 +1,14 @@
 import axios from 'axios';
 import type { ChatMessage } from '../types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
 export async function sendMessage(
@@ -92,7 +92,7 @@ export interface GeneratedProgram {
 
 export async function generateProgram(params: GenerateProgramParams): Promise<GeneratedProgram> {
   try {
-    const response = await api.post('/api/generate-program', params);
+    const response = await api.post('/api/generate-program', params, { timeout: 60000 });
     return response.data.program;
   } catch (error) {
     console.error('Generate Program Error:', error);

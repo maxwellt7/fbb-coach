@@ -131,17 +131,29 @@ function getNotionValue(property) {
   }
 }
 
-// --- Helper: Fetch user profile from Notion ---
+// --- Helper: Fetch user profile from Notion (cached) ---
+let _profileCache = { data: null, timestamp: 0, failed: false };
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function fetchUserProfile() {
   if (!notion || !NOTION_CLIENT_DB_ID) return null;
 
+  // Return cached result if fresh (or if last attempt failed, don't retry for TTL)
+  const now = Date.now();
+  if (now - _profileCache.timestamp < PROFILE_CACHE_TTL) {
+    return _profileCache.data;
+  }
+
   try {
-    const response = await notion.databases.query({
-      database_id: NOTION_CLIENT_DB_ID,
+    const response = await notion.dataSources.query({
+      data_source_id: NOTION_CLIENT_DB_ID,
       page_size: 1,
     });
 
-    if (response.results.length === 0) return null;
+    if (response.results.length === 0) {
+      _profileCache = { data: null, timestamp: now, failed: false };
+      return null;
+    }
 
     const page = response.results[0];
     const props = page.properties;
@@ -154,9 +166,11 @@ async function fetchUserProfile() {
       }
     }
 
+    _profileCache = { data: profile, timestamp: now, failed: false };
     return profile;
   } catch (error) {
     console.error('Error fetching Notion user profile:', error.message);
+    _profileCache = { data: null, timestamp: now, failed: true };
     return null;
   }
 }
@@ -166,8 +180,8 @@ async function fetchNotionWorkouts(limit = 20) {
   if (!notion || !NOTION_WORKOUT_TRACKER_DB_ID) return [];
 
   try {
-    const response = await notion.databases.query({
-      database_id: NOTION_WORKOUT_TRACKER_DB_ID,
+    const response = await notion.dataSources.query({
+      data_source_id: NOTION_WORKOUT_TRACKER_DB_ID,
       page_size: limit,
       sorts: [{ timestamp: 'created_time', direction: 'descending' }],
     });

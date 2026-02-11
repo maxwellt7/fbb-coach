@@ -230,6 +230,8 @@ export default function ProgramBuilder() {
   const [workoutDays, setWorkoutDays] = useState<WorkoutDay[]>(
     existingProgram?.workoutDays || (template ? templateToWorkoutDays(template) : [])
   );
+  const [daysPerWeek, setDaysPerWeek] = useState(existingProgram?.daysPerWeek || template?.days.length || 4);
+  const [experienceLevel, setExperienceLevel] = useState('intermediate');
   const [trainingStyle, setTrainingStyle] = useState('Functional Bodybuilding');
   const [injuries, setInjuries] = useState('');
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -359,8 +361,8 @@ export default function ProgramBuilder() {
     try {
       const result = await generateProgram({
         goal,
-        daysPerWeek: workoutDays.length || 4,
-        experienceLevel: 'intermediate',
+        daysPerWeek,
+        experienceLevel,
         equipment: ['Barbell', 'Dumbbell', 'Cable Machine', 'Machine'],
         trainingStyle,
         injuries: injuries || undefined,
@@ -520,6 +522,33 @@ export default function ProgramBuilder() {
               max={52}
               className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
             />
+          </div>
+          <div>
+            <label htmlFor="days-per-week" className="block text-sm text-gray-400 mb-2">
+              Days Per Week
+            </label>
+            <input
+              id="days-per-week"
+              type="number"
+              value={daysPerWeek}
+              onChange={(e) => { setDaysPerWeek(Math.min(7, Math.max(1, parseInt(e.target.value) || 1))); markDirty(); }}
+              min={1}
+              max={7}
+              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label htmlFor="experience-level" className="block text-sm text-gray-400 mb-2">Experience Level</label>
+            <select
+              id="experience-level"
+              value={experienceLevel}
+              onChange={(e) => { setExperienceLevel(e.target.value); markDirty(); }}
+              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"
+            >
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
           </div>
           <div>
             <label htmlFor="training-style" className="block text-sm text-gray-400 mb-2">Training Style</label>
