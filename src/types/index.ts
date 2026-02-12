@@ -84,6 +84,14 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MuscleGroup {
   name: string;
   exercises: string[];

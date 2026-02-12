@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import type { Program, WorkoutLog, WorkoutSet, ChatMessage, UserStats, PersonalRecord } from '../types';
+import type { Program, WorkoutLog, WorkoutSet, ChatMessage, UserStats, PersonalRecord, Conversation } from '../types';
 import { calcVolume } from '../types';
 import * as syncApi from '../services/api';
 
@@ -24,8 +24,14 @@ interface AppState {
   finishWorkout: (notes?: string, rating?: number) => void;
   cancelWorkout: () => void;
 
-  // Chat History
-  chatMessages: ChatMessage[];
+  // Conversations (Chat History)
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  chatMessages: ChatMessage[]; // Derived from active conversation
+  createConversation: () => string;
+  switchConversation: (id: string) => void;
+  deleteConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
   addChatMessage: (role: 'user' | 'assistant', content: string) => void;
   clearChatHistory: () => void;
 
@@ -187,23 +193,116 @@ export const useStore = create<AppState>()(
         set({ currentWorkout: null });
       },
 
-      // Chat History
-      chatMessages: [],
+      // Conversations (Chat History)
+      conversations: [],
+      activeConversationId: null,
+      chatMessages: [], // Derived from active conversation
+
+      createConversation: () => {
+        const now = new Date().toISOString();
+        const newConversation: Conversation = {
+          id: uuidv4(),
+          title: 'New Chat',
+          messages: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => ({
+          conversations: [newConversation, ...state.conversations],
+          activeConversationId: newConversation.id,
+          chatMessages: [],
+        }));
+        return newConversation.id;
+      },
+
+      switchConversation: (id) => {
+        const conversation = get().conversations.find((c) => c.id === id);
+        if (conversation) {
+          set({
+            activeConversationId: id,
+            chatMessages: conversation.messages,
+          });
+        }
+      },
+
+      deleteConversation: (id) => {
+        set((state) => {
+          const newConversations = state.conversations.filter((c) => c.id !== id);
+          const wasActive = state.activeConversationId === id;
+          return {
+            conversations: newConversations,
+            activeConversationId: wasActive
+              ? newConversations[0]?.id || null
+              : state.activeConversationId,
+            chatMessages: wasActive
+              ? newConversations[0]?.messages || []
+              : state.chatMessages,
+          };
+        });
+      },
+
+      renameConversation: (id, title) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, title, updatedAt: new Date().toISOString() } : c
+          ),
+        }));
+      },
 
       addChatMessage: (role, content) => {
+        const { activeConversationId, conversations } = get();
+        
+        // Create a new conversation if none exists
+        let conversationId = activeConversationId;
+        if (!conversationId) {
+          conversationId = get().createConversation();
+        }
+
         const message: ChatMessage = {
           id: uuidv4(),
           role,
           content,
           timestamp: new Date().toISOString(),
         };
-        set((state) => ({
-          chatMessages: [...state.chatMessages, message],
-        }));
+
+        set((state) => {
+          const updatedConversations = state.conversations.map((c) => {
+            if (c.id === conversationId) {
+              const updatedMessages = [...c.messages, message];
+              // Auto-title based on first user message
+              const newTitle =
+                c.title === 'New Chat' && role === 'user'
+                  ? content.slice(0, 40) + (content.length > 40 ? '...' : '')
+                  : c.title;
+              return {
+                ...c,
+                title: newTitle,
+                messages: updatedMessages,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return c;
+          });
+
+          return {
+            conversations: updatedConversations,
+            chatMessages: [...state.chatMessages, message],
+          };
+        });
       },
 
       clearChatHistory: () => {
-        set({ chatMessages: [] });
+        const { activeConversationId } = get();
+        if (!activeConversationId) return;
+
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === activeConversationId
+              ? { ...c, messages: [], updatedAt: new Date().toISOString() }
+              : c
+          ),
+          chatMessages: [],
+        }));
       },
 
       // Stats
@@ -460,10 +559,22 @@ export const useStore = create<AppState>()(
         programs: state.programs,
         activeProgram: state.activeProgram,
         workoutLogs: state.workoutLogs,
-        chatMessages: state.chatMessages,
+        conversations: state.conversations,
+        activeConversationId: state.activeConversationId,
         currentWorkout: state.currentWorkout,
-        // Don't persist sync state
+        // Don't persist sync state or derived chatMessages
       }),
+      onRehydrate: () => (state) => {
+        // Restore chatMessages from active conversation after rehydration
+        if (state && state.activeConversationId) {
+          const conversation = state.conversations.find(
+            (c) => c.id === state.activeConversationId
+          );
+          if (conversation) {
+            state.chatMessages = conversation.messages;
+          }
+        }
+      },
     }
   )
 );
