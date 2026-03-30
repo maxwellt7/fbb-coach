@@ -250,7 +250,7 @@ export const useStore = create<AppState>()(
       },
 
       addChatMessage: (role, content) => {
-        const { activeConversationId, conversations } = get();
+        const { activeConversationId } = get();
         
         // Create a new conversation if none exists
         let conversationId = activeConversationId;
@@ -564,11 +564,11 @@ export const useStore = create<AppState>()(
         currentWorkout: state.currentWorkout,
         // Don't persist sync state or derived chatMessages
       }),
-      onRehydrate: () => (state) => {
+      onRehydrateStorage: () => (state: AppState | undefined) => {
         // Restore chatMessages from active conversation after rehydration
         if (state && state.activeConversationId) {
           const conversation = state.conversations.find(
-            (c) => c.id === state.activeConversationId
+            (c: Conversation) => c.id === state.activeConversationId
           );
           if (conversation) {
             state.chatMessages = conversation.messages;
